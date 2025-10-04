@@ -11,6 +11,10 @@ A local web-based inventory management system for tracking 3D printing filament 
 - 🌐 **Network Access**: Share with roommates or others on your local network
 - 💾 **Local Storage**: All data stored locally in JSON files
 - ⚡ **Real-time Updates**: Instant updates across all connected browsers
+- 🌙 **Dark Mode**: Toggle between light and dark themes
+- 🤖 **AMS Integration Ready**: API endpoints for automatic filament usage tracking
+- 📈 **Print History**: Track recent print jobs and filament consumption
+- 🔄 **Bulk Operations**: Multi-filament usage tracking for complex prints
 
 ## Quick Start
 
@@ -90,7 +94,7 @@ ip addr show
 ## Network Sharing
 
 To share with roommates or others on your network:
-
+Real 1. "$env:PATH += ";C:\Program Files\nodejs"; npm start"
 1. Start the server (`npm start`)
 2. Find your computer's IP address
 3. Share the URL: `http://YOUR_IP_ADDRESS:3000`
@@ -109,7 +113,49 @@ If your IP is `192.168.1.100`, share: `http://192.168.1.100:3000`
 ## Keyboard Shortcuts
 
 - **Ctrl/Cmd + N**: Add new filament
+- **Ctrl/Cmd + D**: Toggle dark mode
 - **Escape**: Close modal dialogs
+
+## AMS Integration (Anycubic Kobra 2 Pro Ready)
+
+### Automatic Filament Tracking
+The system includes API endpoints for automatic integration with your 3D printer and AMS:
+
+**Slicer Post-Processing Integration:**
+- Automatically track filament usage after each print
+- Smart filament matching by material and color
+- Multi-material print support
+
+**Print History Tracking:**
+- See recent print jobs on each filament card
+- Track usage patterns and consumption rates
+- Automatic weight updates after prints
+
+### API Integration Examples
+
+**Reduce filament usage (post-print):**
+```bash
+POST /api/filaments/:id/use
+{
+  "usedWeight": 25.5,
+  "printJob": "phone_case.gcode",
+  "printTime": 180
+}
+```
+
+**Find matching filament for AMS:**
+```bash
+GET /api/filaments/search?material=PLA&color=Red
+```
+
+**Multi-material usage tracking:**
+```bash
+POST /api/filaments/bulk-use
+[
+  {"id": "123", "usedWeight": 15.2},
+  {"id": "456", "usedWeight": 8.7}
+]
+```
 
 ## Technical Details
 
@@ -117,21 +163,28 @@ If your IP is `192.168.1.100`, share: `http://192.168.1.100:3000`
 ```
 3d-filament-inventory/
 ├── package.json          # Project dependencies
-├── server.js             # Express server
+├── server.js             # Express server with AMS APIs
 ├── data/                 # Data storage
 │   └── filaments.json   # Filament inventory data
 └── public/              # Web interface
-    ├── index.html       # Main page
-    ├── styles.css       # Styling
-    └── script.js        # Frontend logic
+    ├── index.html       # Main page with dark mode
+    ├── styles.css       # Styling with theme support
+    └── script.js        # Frontend logic + print history
 ```
 
 ### API Endpoints
 
+**Core Inventory:**
 - `GET /api/filaments` - Get all filaments
 - `POST /api/filaments` - Add new filament
 - `PUT /api/filaments/:id` - Update filament
 - `DELETE /api/filaments/:id` - Delete filament
+
+**AMS Integration:**
+- `POST /api/filaments/:id/use` - Track filament usage
+- `GET /api/filaments/search` - Find filaments by criteria
+- `POST /api/filaments/bulk-use` - Multi-filament usage
+- `GET /api/ams/status` - AMS slot mapping
 
 ## Troubleshooting
 
@@ -159,6 +212,27 @@ PORT=8080 npm start
 
 ### Adding New Material Types
 Edit the material options in both `index.html` and `script.js` to add custom filament types.
+
+## Future Printer Integration
+
+### When Your Kobra 2 Pro + AMS Arrives
+
+**Slicer Setup (Anycubic Slicer):**
+1. Enable post-processing scripts in slicer settings
+2. Add PowerShell script to call usage APIs after prints
+3. Configure material/color variables for automatic matching
+
+**Klipper Integration (If Upgrading Firmware):**
+1. Add custom macros for print completion
+2. Configure HTTP calls to inventory APIs  
+3. Enable automatic spool detection and tracking
+
+**AMS Hardware Integration (Future):**
+- Direct communication with AMS slots
+- Automatic spool identification
+- Real-time weight monitoring
+
+The system is designed to grow with your setup - start simple and add automation as needed!
 
 ## Contributing
 

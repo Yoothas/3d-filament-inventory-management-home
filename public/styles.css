@@ -9,6 +9,13 @@ body {
     background-color: #f5f5f5;
     color: #333;
     line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Mode */
+body.dark-mode {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
 }
 
 .container {
@@ -24,12 +31,28 @@ header {
     margin-bottom: 30px;
     padding: 20px 0;
     border-bottom: 2px solid #e0e0e0;
+    transition: border-color 0.3s ease;
+}
+
+.dark-mode header {
+    border-bottom-color: #444;
+}
+
+.header-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
 }
 
 header h1 {
     color: #2c3e50;
     font-size: 2.5em;
     font-weight: 300;
+    transition: color 0.3s ease;
+}
+
+.dark-mode header h1 {
+    color: #e0e0e0;
 }
 
 .btn {
@@ -93,6 +116,12 @@ header h1 {
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     margin-bottom: 30px;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dark-mode .stats-bar {
+    background: #2d2d2d;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
 .stat {
@@ -111,6 +140,11 @@ header h1 {
     color: #2c3e50;
     font-size: 24px;
     font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.dark-mode .stat-value {
+    color: #e0e0e0;
 }
 
 .search-bar {
@@ -126,6 +160,16 @@ header h1 {
     border-radius: 6px;
     font-size: 16px;
     flex: 1;
+    background: white;
+    color: #333;
+    transition: all 0.3s ease;
+}
+
+.dark-mode .search-bar input,
+.dark-mode .search-bar select {
+    background: #2d2d2d;
+    border-color: #555;
+    color: #e0e0e0;
 }
 
 .search-bar input:focus,
@@ -145,8 +189,13 @@ header h1 {
     border-radius: 12px;
     padding: 20px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
     border-left: 5px solid #3498db;
+}
+
+.dark-mode .filament-card {
+    background: #2d2d2d;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
 .filament-card:hover {
@@ -170,6 +219,11 @@ header h1 {
     font-weight: 600;
     color: #2c3e50;
     margin-bottom: 5px;
+    transition: color 0.3s ease;
+}
+
+.dark-mode .filament-brand {
+    color: #e0e0e0;
 }
 
 .filament-material {
@@ -200,6 +254,11 @@ header h1 {
     align-items: center;
     padding: 8px 0;
     border-bottom: 1px solid #ecf0f1;
+    transition: border-color 0.3s ease;
+}
+
+.dark-mode .detail-item {
+    border-bottom-color: #444;
 }
 
 .detail-label {
@@ -210,6 +269,11 @@ header h1 {
 .detail-value {
     color: #2c3e50;
     font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.dark-mode .detail-value {
+    color: #e0e0e0;
 }
 
 .weight-progress {
@@ -229,6 +293,11 @@ header h1 {
     background: #ecf0f1;
     border-radius: 4px;
     overflow: hidden;
+    transition: background-color 0.3s ease;
+}
+
+.dark-mode .progress-bar {
+    background: #444;
 }
 
 .progress-fill {
@@ -245,6 +314,77 @@ header h1 {
     font-size: 14px;
     color: #555;
     font-style: italic;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark-mode .filament-notes {
+    background: #1a1a1a;
+    color: #bbb;
+}
+
+.print-history {
+    margin: 15px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #3498db;
+}
+
+.dark-mode .print-history {
+    background: #1a1a1a;
+    border-left-color: #3498db;
+}
+
+.print-history strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.dark-mode .print-history strong {
+    color: #e0e0e0;
+}
+
+.history-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.dark-mode .history-item {
+    border-bottom-color: #444;
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-job {
+    color: #7f8c8d;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dark-mode .history-job {
+    color: #bbb;
+}
+
+.history-usage {
+    color: #e74c3c;
+    font-weight: 500;
+    margin-left: 10px;
 }
 
 .filament-actions {
@@ -274,6 +414,11 @@ header h1 {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
+    transition: background-color 0.3s ease;
+}
+
+.dark-mode .modal-content {
+    background-color: #2d2d2d;
 }
 
 .close {
@@ -303,6 +448,11 @@ header h1 {
     margin-bottom: 5px;
     color: #2c3e50;
     font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.dark-mode .form-group label {
+    color: #e0e0e0;
 }
 
 .form-group input,
@@ -314,6 +464,17 @@ header h1 {
     border-radius: 6px;
     font-size: 16px;
     font-family: inherit;
+    background: white;
+    color: #333;
+    transition: all 0.3s ease;
+}
+
+.dark-mode .form-group input,
+.dark-mode .form-group select,
+.dark-mode .form-group textarea {
+    background: #1a1a1a;
+    border-color: #555;
+    color: #e0e0e0;
 }
 
 .form-group input:focus,

@@ -9,13 +9,18 @@ const filamentForm = document.getElementById('filamentForm');
 const modalTitle = document.getElementById('modalTitle');
 const searchInput = document.getElementById('searchInput');
 const materialFilter = document.getElementById('materialFilter');
+const darkModeToggle = document.getElementById('darkModeToggle');
 
 // Event Listeners
-document.addEventListener('DOMContentLoaded', loadFilaments);
+document.addEventListener('DOMContentLoaded', () => {
+    loadFilaments();
+    initializeDarkMode();
+});
 addFilamentBtn.addEventListener('click', () => openModal());
 filamentForm.addEventListener('submit', handleFormSubmit);
 searchInput.addEventListener('input', filterFilaments);
 materialFilter.addEventListener('change', filterFilaments);
+darkModeToggle.addEventListener('click', toggleDarkMode);
 
 // Modal controls
 document.querySelector('.close').addEventListener('click', closeModal);
@@ -59,12 +64,12 @@ function renderFilaments(filamentsToRender = filaments) {
             <div class="filament-card ${isLowStock ? 'low-stock' : ''}">
                 <div class="filament-header">
                     <div class="filament-title">
-                        <div class="filament-brand">${escapeHtml(filament.brand)}</div>
+                        <div class="filament-brand">${escapeHtml(filament.color)}</div>
                         <span class="filament-material">${filament.material}</span>
                     </div>
                 </div>
                 
-                <div class="filament-color">${escapeHtml(filament.color)}</div>
+                <div class="filament-color">${escapeHtml(filament.brand)}</div>
                 
                 <div class="filament-details">
                     <div class="detail-item">
@@ -92,6 +97,20 @@ function renderFilaments(filamentsToRender = filaments) {
                 </div>
                 
                 ${filament.notes ? `<div class="filament-notes">"${escapeHtml(filament.notes)}"</div>` : ''}
+                
+                ${filament.printHistory && filament.printHistory.length > 0 ? `
+                    <div class="print-history">
+                        <strong>Recent Prints:</strong>
+                        <div class="history-items">
+                            ${filament.printHistory.slice(-3).map(print => `
+                                <div class="history-item">
+                                    <span class="history-job">${escapeHtml(print.printJob)}</span>
+                                    <span class="history-usage">-${print.usedWeight}g</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
                 
                 <div class="filament-actions">
                     <button class="btn btn-edit" onclick="editFilament('${filament.id}')">Edit</button>
@@ -275,6 +294,39 @@ function showSuccess(message) {
     alert('Success: ' + message);
 }
 
+// Dark Mode Functions
+function initializeDarkMode() {
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    if (isDarkMode) {
+        document.body.classList.add('dark-mode');
+        updateDarkModeButton(true);
+    }
+}
+
+function toggleDarkMode() {
+    const isDarkMode = document.body.classList.contains('dark-mode');
+    
+    if (isDarkMode) {
+        document.body.classList.remove('dark-mode');
+        localStorage.setItem('darkMode', 'false');
+        updateDarkModeButton(false);
+    } else {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('darkMode', 'true');
+        updateDarkModeButton(true);
+    }
+}
+
+function updateDarkModeButton(isDarkMode) {
+    if (isDarkMode) {
+        darkModeToggle.textContent = '☀️ Light Mode';
+        darkModeToggle.title = 'Switch to Light Mode';
+    } else {
+        darkModeToggle.textContent = '🌙 Dark Mode';
+        darkModeToggle.title = 'Switch to Dark Mode';
+    }
+}
+
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
     // Escape to close modal
@@ -286,5 +338,11 @@ document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
         openModal();
+    }
+    
+    // Ctrl/Cmd + D to toggle dark mode
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        toggleDarkMode();
     }
 });
