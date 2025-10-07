@@ -61,6 +61,37 @@ or
 ip addr show
 ```
 
+## Anycubic Slicer Integration (Auto-deduct filament)
+
+You can have Anycubic Slicer call back into this app after a print to auto-reduce the filament remaining.
+
+1) Make sure the server is running on the same PC as the slicer (or set FILAMENT_SERVER_HOST)
+
+2) Save the helper script:
+- File already included at `tools/postprint-usage.ps1`
+
+3) In Anycubic Slicer, set a Post-processing command (after slicing or after print):
+
+Windows PowerShell command to paste:
+
+```
+powershell -ExecutionPolicy Bypass -File "${project_path}/tools/postprint-usage.ps1" -used_g ${filament_used_mm3/[(1.75/2)^2*3.1415926535]*1.24} -material "${filament_type[0]}" -color "${filament_color[0]}" -brand "${filament_vendor[0]}" -job "${filename}">
+```
+
+Notes:
+- `${filament_used_mm3}` is converted to grams (PLA density ~1.24 g/cm³); adjust density for other materials if desired
+- If your slicer exposes `${filament_used_g}` directly, use that instead for `-used_g`
+- For multi-material, duplicate the flags with index `[1]`, `[2]`, etc. and call the script multiple times, or switch to the bulk API.
+
+Optional environment overrides:
+- `FILAMENT_SERVER_HOST` (e.g., `http://192.168.1.18:3000`) if the slicer is on a different machine
+- `FILAMENT_SERVER_PORT` (default 3000)
+
+Troubleshooting:
+- If PowerShell script execution is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+- Check that your filament inventory contains matching Material/Color/Brand
+- Watch the command line output in Slicer’s post-processing log for details
+
 ## Usage
 
 ### Adding Filaments
