@@ -92,7 +92,9 @@ If your slicer errors with "Non-integer index is not allowed to address a vector
 "${project_path}/tools/postprint-usage.cmd" "${output_filepath}"
 ```
 
-The script will read the first ~300 lines of the G-code, extract material/color/brand and filament used (grams or cm³), and call the API. You can still override values explicitly with flags if needed.
+The script will scan both the first ~500 lines and the last ~500 lines of the G-code (and will fall back to a fast full-file search) to extract material/color/brand and filament used (grams or cm³), then call the API. You can still override values explicitly with flags if needed.
+
+Important: To ensure usage is deducted only after a print actually finishes, configure this as an "After Print" hook if your workflow supports it (e.g., printer host like OctoPrint/Klipper). If you can only hook after slicing in your slicer, the UI will still reflect the change once the post-print script runs at print completion (recommended via printer host). If a print fails, the script will still deduct the grams it parsed from the G-code you provided; for truly precise failed-print tracking, use a host-side completion hook that passes the actual printed time/used grams if available.
 
 Notes:
 - If your slicer provides `${filament_used_mm3}`, the script will convert to grams. You can override density via `-density 1.24` (PLA default), e.g. PETG 1.27, ABS 1.04.
@@ -102,11 +104,13 @@ Notes:
 Optional environment overrides:
 - `FILAMENT_SERVER_HOST` (e.g., `http://192.168.1.18:3000`) if the slicer is on a different machine
 - `FILAMENT_SERVER_PORT` (default 3000)
+ - `FILAMENT_POSTPRINT_LOG` set to `1` to write a log to `%LOCALAPPDATA%/FilamentInventory/postprint.log`, or set to a full file path for a custom log location. Helpful for troubleshooting.
 
 Troubleshooting:
 - If PowerShell script execution is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 - Check that your filament inventory contains matching Material/Color/Brand
 - Watch the command line output in Slicer’s post-processing log for details
+ - Enable logging by setting `FILAMENT_POSTPRINT_LOG=1` and review the log for parsed values and API responses
 
 ## Usage
 

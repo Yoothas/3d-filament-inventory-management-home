@@ -14,6 +14,34 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Optional logging to help troubleshoot slicer integration
+$Global:LogPath = $null
+try {
+    $logEnv = $env:FILAMENT_POSTPRINT_LOG
+    if ($null -ne $logEnv -and $logEnv -ne '') {
+        if ($logEnv -eq '1') {
+            $base = Join-Path -Path $env:LOCALAPPDATA -ChildPath 'FilamentInventory'
+            if (-not (Test-Path -LiteralPath $base)) { New-Item -ItemType Directory -Path $base -Force | Out-Null }
+            $Global:LogPath = Join-Path -Path $base -ChildPath 'postprint.log'
+        } else {
+            $Global:LogPath = $logEnv
+            $dir = Split-Path -Parent $Global:LogPath
+            if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        }
+    }
+} catch { }
+
+function Write-Log {
+    param([string]$message)
+    try {
+        Write-Host $message
+        if ($Global:LogPath) {
+            $ts = (Get-Date -Format s)
+            Add-Content -LiteralPath $Global:LogPath -Value ("[$ts] $message")
+        }
+    } catch { }
+}
+
 # Resolve server base URL (local and network fallback)
 $Port = $env:FILAMENT_SERVER_PORT
 if (-not $Port -or $Port -eq '') { $Port = 3000 }
@@ -32,11 +60,13 @@ function Find-Filament {
 
     $url = "$HostLAN/api/filaments/search?$q"
     try {
-        return Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
+        $res = Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
+        return $res
     } catch {
         # Fallback to localhost if LAN URL fails
         $url = "$HostLocal/api/filaments/search?$q"
-        return Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
+        $resLocal = Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
+        return $resLocal
     }
 }
 
@@ -45,11 +75,13 @@ function Use-Filament {
     $body = @{ usedWeight = $grams; printJob = $jobName } | ConvertTo-Json
     $url = "$HostLAN/api/filaments/$id/use"
     try {
-        return Invoke-RestMethod -Method POST -Uri $url -Body $body -ContentType 'application/json' -TimeoutSec 5
+        $res = Invoke-RestMethod -Method POST -Uri $url -Body $body -ContentType 'application/json' -TimeoutSec 5
+        return $res
     } catch {
         # Fallback to localhost
         $url = "$HostLocal/api/filaments/$id/use"
-        return Invoke-RestMethod -Method POST -Uri $url -Body $body -ContentType 'application/json' -TimeoutSec 5
+        $resLocal = Invoke-RestMethod -Method POST -Uri $url -Body $body -ContentType 'application/json' -TimeoutSec 5
+        return $resLocal
     }
 }
 
@@ -81,54 +113,101 @@ if (-not $gcode -and $args.Count -gt 0) {
     if (Test-Path -LiteralPath $args[0]) { $gcode = $args[0] }
 }
 
-# If grams/mm3/material are not provided, attempt to parse from G-code header (Prusa/Anycubic style)
+# If grams/mm3/material are not provided, attempt to parse from G-code (Prusa/Anycubic style)
+function Get-GcodeWindow {
+    param([string]$path, [int]$headCount = 500, [int]$tailCount = 500)
+    $lines = @()
+    try { $h = Get-Content -LiteralPath $path -TotalCount $headCount -ErrorAction Stop } catch { $h = @() }
+    try { $t = Get-Content -LiteralPath $path -Tail $tailCount -ErrorAction Stop } catch { $t = @() }
+    # Merge, avoiding duplicate concatenation when file has fewer lines than headCount+tailCount
+    $lines = @($h + $t)
+    return $lines
+}
+
 if ($gcode -and (Test-Path -LiteralPath $gcode)) {
     try {
-        $header = Get-Content -LiteralPath $gcode -TotalCount 300 -ErrorAction Stop
-        # Parse grams from header lines like: "; filament used [g] = 12.34" (can contain multiple numbers for multi-extruder)
+        $window = Get-GcodeWindow -path $gcode -headCount 500 -tailCount 500
+        if (-not $window -or $window.Count -eq 0) { $window = Get-Content -LiteralPath $gcode -TotalCount 1000 }
+
+        # Parse grams from lines like: "; filament used [g] = 12.34" (may include multiple values for multi-extruder)
         $gSum = $null
-        foreach ($line in $header) {
+        foreach ($line in $window) {
             if ($line -match '^;\s*filament used \[g\]\s*=') {
                 $nums = [regex]::Matches($line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
-                if ($nums.Count -gt 0) {
-                    $gSum = ($nums | Measure-Object -Sum).Sum
-                }
+                if ($nums.Count -gt 0) { $gSum = ($nums | Measure-Object -Sum).Sum }
                 break
             }
+        }
+
+        # If not found in window, try a fast full-file search
+        if ($gSum -eq $null) {
+            try {
+                $match = Select-String -Path $gcode -Pattern '^;\s*filament used \[g\]\s*=' -SimpleMatch:$false -CaseSensitive:$false | Select-Object -First 1
+                if ($match) {
+                    $nums = [regex]::Matches($match.Line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
+                    if ($nums.Count -gt 0) { $gSum = ($nums | Measure-Object -Sum).Sum }
+                }
+            } catch { }
         }
         if (-not $used_g -and $gSum -ne $null) { $used_g = [Math]::Round($gSum,2) }
 
         # Parse cm3 if needed
         if (-not $used_g -and -not $used_mm3) {
-            foreach ($line in $header) {
+            $cm3Sum = $null
+            foreach ($line in $window) {
                 if ($line -match '^;\s*filament used \[cm3\]\s*=') {
                     $nums = [regex]::Matches($line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
-                    if ($nums.Count -gt 0) {
-                        $cm3 = ($nums | Measure-Object -Sum).Sum
-                        $used_mm3 = $cm3 * 1000.0
-                    }
+                    if ($nums.Count -gt 0) { $cm3Sum = ($nums | Measure-Object -Sum).Sum }
                     break
                 }
             }
+            if ($cm3Sum -eq $null) {
+                try {
+                    $match2 = Select-String -Path $gcode -Pattern '^;\s*filament used \[cm3\]\s*=' -SimpleMatch:$false -CaseSensitive:$false | Select-Object -First 1
+                    if ($match2) {
+                        $nums = [regex]::Matches($match2.Line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
+                        if ($nums.Count -gt 0) { $cm3Sum = ($nums | Measure-Object -Sum).Sum }
+                    }
+                } catch { }
+            }
+            if ($cm3Sum -ne $null) { $used_mm3 = $cm3Sum * 1000.0 }
         }
 
-        # Parse material/color/brand lines: e.g., "; filament_type = PLA" "; filament_colour = #FF0000" "; filament_vendor = HATCHBOX"
+        # Parse material/color/brand lines
         if (-not $material) {
-            $matLine = $header | Where-Object { $_ -match '^;\s*filament_type\s*=\s*(.+)$' } | Select-Object -First 1
+            $matLine = $window | Where-Object { $_ -match '^;\s*filament_type\s*=\s*(.+)$' } | Select-Object -First 1
+            if (-not $matLine) {
+                try {
+                    $m = Select-String -Path $gcode -Pattern '^;\s*filament_type\s*=\s*(.+)$' -CaseSensitive:$false | Select-Object -First 1
+                    if ($m) { $matLine = $m.Line }
+                } catch { }
+            }
             if ($matLine) {
                 $material = ($matLine -replace '^;\s*filament_type\s*=\s*', '').Trim(' "\'')
                 if ($material -match ',') { $material = $material.Split(',')[0].Trim() }
             }
         }
         if (-not $color) {
-            $colLine = $header | Where-Object { $_ -match '^;\s*filament_colou?r\s*=\s*(.+)$' } | Select-Object -First 1
+            $colLine = $window | Where-Object { $_ -match '^;\s*filament_colou?r\s*=\s*(.+)$' } | Select-Object -First 1
+            if (-not $colLine) {
+                try {
+                    $c = Select-String -Path $gcode -Pattern '^;\s*filament_colou?r\s*=\s*(.+)$' -CaseSensitive:$false | Select-Object -First 1
+                    if ($c) { $colLine = $c.Line }
+                } catch { }
+            }
             if ($colLine) {
                 $color = ($colLine -replace '^;\s*filament_colou?r\s*=\s*', '').Trim(' "\'')
                 if ($color -match ',') { $color = $color.Split(',')[0].Trim() }
             }
         }
         if (-not $brand) {
-            $brandLine = $header | Where-Object { $_ -match '^;\s*filament_vendor\s*=\s*(.+)$' } | Select-Object -First 1
+            $brandLine = $window | Where-Object { $_ -match '^;\s*filament_vendor\s*=\s*(.+)$' } | Select-Object -First 1
+            if (-not $brandLine) {
+                try {
+                    $b = Select-String -Path $gcode -Pattern '^;\s*filament_vendor\s*=\s*(.+)$' -CaseSensitive:$false | Select-Object -First 1
+                    if ($b) { $brandLine = $b.Line }
+                } catch { }
+            }
             if ($brandLine) {
                 $brand = ($brandLine -replace '^;\s*filament_vendor\s*=\s*', '').Trim(' "\'')
                 if ($brand -match ',') { $brand = $brand.Split(',')[0].Trim() }
@@ -136,25 +215,26 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
         }
         if (-not $job) { $job = [IO.Path]::GetFileName($gcode) }
     } catch {
-        Write-Warning "Failed to parse G-code header: $($_.Exception.Message)"
+        Write-Warning "Failed to parse G-code: $($_.Exception.Message)"
     }
 }
 
 $grams = Resolve-Grams -g $used_g -mm3 $used_mm3 -dens $density -mat $material
-Write-Host "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
+Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
 
 $response = Find-Filament -mat $material -col $color -br $brand
 if (-not $response -or -not $response.matches -or $response.count -eq 0) {
     Write-Warning "No matching filament found. Ensure inventory contains this material/color/brand."
+    Write-Log "[postprint] No matches for material='$material' color='$color' brand='$brand'"
     exit 0
 }
 
 $filament = $response.matches[0]
-Write-Host "[postprint] Using filament: $($filament.brand) $($filament.color) ($($filament.material)) -> id=$($filament.id)"
+Write-Log "[postprint] Using filament: $($filament.brand) $($filament.color) ($($filament.material)) -> id=$($filament.id)"
 
 $result = Use-Filament -id $filament.id -grams $grams -jobName $job
 if ($result -and $result.filament) {
-    Write-Host ("[postprint] Updated: used {0}g, remaining {1}g" -f $grams, $result.filament.remainingWeight)
+    Write-Log ("[postprint] Updated: used {0}g, remaining {1}g" -f $grams, $result.filament.remainingWeight)
 } else {
-    Write-Host ("[postprint] Updated: used {0}g" -f $grams)
+    Write-Log ("[postprint] Updated: used {0}g" -f $grams)
 }
