@@ -10,17 +10,26 @@ const modalTitle = document.getElementById('modalTitle');
 const searchInput = document.getElementById('searchInput');
 const materialFilter = document.getElementById('materialFilter');
 const darkModeToggle = document.getElementById('darkModeToggle');
+const refreshBtn = document.getElementById('refreshBtn');
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     loadFilaments();
     initializeDarkMode();
+    initializeAutoRefresh();
 });
 addFilamentBtn.addEventListener('click', () => openModal());
 filamentForm.addEventListener('submit', handleFormSubmit);
 searchInput.addEventListener('input', filterFilaments);
 materialFilter.addEventListener('change', filterFilaments);
 darkModeToggle.addEventListener('click', toggleDarkMode);
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+        if (filamentModal.style.display !== 'block') {
+            loadFilaments();
+        }
+    });
+}
 
 // Modal controls
 document.querySelector('.close').addEventListener('click', closeModal);
@@ -292,6 +301,24 @@ function showError(message) {
 function showSuccess(message) {
     // Simple success display - you could enhance this with a proper notification system
     alert('Success: ' + message);
+}
+
+// Auto-refresh Functions
+let autoRefreshTimer = null;
+function initializeAutoRefresh() {
+    const INTERVAL_MS = 15000; // 15 seconds
+    function tick() {
+        if (document.hidden) return; // pause in background
+        if (filamentModal.style.display === 'block') return; // don't refresh during edit
+        loadFilaments();
+    }
+    autoRefreshTimer = setInterval(tick, INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // immediate refresh when returning to the tab
+            tick();
+        }
+    });
 }
 
 // Dark Mode Functions
