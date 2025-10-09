@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory=$false)][double]$used_g,
     [Parameter(Mandatory=$false)][double]$used_mm3,
     [Parameter(Mandatory=$false)][double]$density,
+    [Parameter(Mandatory=$false)][string]$gcode,
     [Parameter(Mandatory=$false)][string]$material,
     [Parameter(Mandatory=$false)][string]$color,
     [Parameter(Mandatory=$false)][string]$brand,
@@ -73,6 +74,70 @@ function Resolve-Grams {
         return [Math]::Round(($mm3 / 1000.0) * $resolved, 2)
     }
     throw "Either -used_g or -used_mm3 must be provided."
+}
+
+# Try detect G-code path if not explicitly provided
+if (-not $gcode -and $args.Count -gt 0) {
+    if (Test-Path -LiteralPath $args[0]) { $gcode = $args[0] }
+}
+
+# If grams/mm3/material are not provided, attempt to parse from G-code header (Prusa/Anycubic style)
+if ($gcode -and (Test-Path -LiteralPath $gcode)) {
+    try {
+        $header = Get-Content -LiteralPath $gcode -TotalCount 300 -ErrorAction Stop
+        # Parse grams from header lines like: "; filament used [g] = 12.34" (can contain multiple numbers for multi-extruder)
+        $gSum = $null
+        foreach ($line in $header) {
+            if ($line -match '^;\s*filament used \[g\]\s*=') {
+                $nums = [regex]::Matches($line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
+                if ($nums.Count -gt 0) {
+                    $gSum = ($nums | Measure-Object -Sum).Sum
+                }
+                break
+            }
+        }
+        if (-not $used_g -and $gSum -ne $null) { $used_g = [Math]::Round($gSum,2) }
+
+        # Parse cm3 if needed
+        if (-not $used_g -and -not $used_mm3) {
+            foreach ($line in $header) {
+                if ($line -match '^;\s*filament used \[cm3\]\s*=') {
+                    $nums = [regex]::Matches($line, '(\d+(?:\.\d+)?)') | ForEach-Object { [double]$_.Value }
+                    if ($nums.Count -gt 0) {
+                        $cm3 = ($nums | Measure-Object -Sum).Sum
+                        $used_mm3 = $cm3 * 1000.0
+                    }
+                    break
+                }
+            }
+        }
+
+        # Parse material/color/brand lines: e.g., "; filament_type = PLA" "; filament_colour = #FF0000" "; filament_vendor = HATCHBOX"
+        if (-not $material) {
+            $matLine = $header | Where-Object { $_ -match '^;\s*filament_type\s*=\s*(.+)$' } | Select-Object -First 1
+            if ($matLine) {
+                $material = ($matLine -replace '^;\s*filament_type\s*=\s*', '').Trim(' "\'')
+                if ($material -match ',') { $material = $material.Split(',')[0].Trim() }
+            }
+        }
+        if (-not $color) {
+            $colLine = $header | Where-Object { $_ -match '^;\s*filament_colou?r\s*=\s*(.+)$' } | Select-Object -First 1
+            if ($colLine) {
+                $color = ($colLine -replace '^;\s*filament_colou?r\s*=\s*', '').Trim(' "\'')
+                if ($color -match ',') { $color = $color.Split(',')[0].Trim() }
+            }
+        }
+        if (-not $brand) {
+            $brandLine = $header | Where-Object { $_ -match '^;\s*filament_vendor\s*=\s*(.+)$' } | Select-Object -First 1
+            if ($brandLine) {
+                $brand = ($brandLine -replace '^;\s*filament_vendor\s*=\s*', '').Trim(' "\'')
+                if ($brand -match ',') { $brand = $brand.Split(',')[0].Trim() }
+            }
+        }
+        if (-not $job) { $job = [IO.Path]::GetFileName($gcode) }
+    } catch {
+        Write-Warning "Failed to parse G-code header: $($_.Exception.Message)"
+    }
 }
 
 $grams = Resolve-Grams -g $used_g -mm3 $used_mm3 -dens $density -mat $material

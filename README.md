@@ -86,6 +86,14 @@ Option B — reference a script file (recommended if you see "configured post-pr
 "${project_path}/tools/postprint-usage.cmd" -used_mm3 ${filament_used_mm3} -material "${filament_type[0]}" -color "${filament_color[0]}" -brand "${filament_vendor[0]}" -job "${filename}"
 ```
 
+If your slicer errors with "Non-integer index is not allowed to address a vector variable" (e.g., using `${filament_type[initial_tool]}`), avoid non-numeric indices. Either use `[0]` for single-material, or use this ultra-simple command that needs only the G-code file path and parses the header automatically:
+
+```
+"${project_path}/tools/postprint-usage.cmd" "${output_filepath}"
+```
+
+The script will read the first ~300 lines of the G-code, extract material/color/brand and filament used (grams or cm³), and call the API. You can still override values explicitly with flags if needed.
+
 Notes:
 - If your slicer provides `${filament_used_mm3}`, the script will convert to grams. You can override density via `-density 1.24` (PLA default), e.g. PETG 1.27, ABS 1.04.
 - If your slicer exposes `${filament_used_g}` directly, use that instead for `-used_g`
@@ -133,11 +141,12 @@ Troubleshooting:
 ## Network Sharing
 
 To share with roommates or others on your network:
-Real 1. "$env:PATH += ";C:\Program Files\nodejs"; npm start"
-1. Start the server (`npm start`)
-2. Find your computer's IP address
-3. Share the URL: `http://YOUR_IP_ADDRESS:3000`
-4. Others can access it directly in their browsers
+Real 
+1. "$env:PATH += ";C:\Program Files\nodejs"; npm start"
+2. Start the server (`npm start`)
+3. Find your computer's IP address
+4. Share the URL: `http://YOUR_IP_ADDRESS:3000`
+5. Others can access it directly in their browsers
 
 **Example:**
 If your IP is `192.168.1.100`, share: `http://192.168.1.100:3000`
