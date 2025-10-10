@@ -49,8 +49,35 @@ $HostLocal = "http://localhost:$Port"
 $HostLAN = $env:FILAMENT_SERVER_HOST
 if (-not $HostLAN -or $HostLAN -eq '') { $HostLAN = $HostLocal }
 
+# Map common slicer/printer brand names to actual inventory brands
+function Map-BrandName {
+    param([string]$slicerBrand)
+    if (-not $slicerBrand) { return $slicerBrand }
+    
+    # Case-insensitive mapping
+    $lower = $slicerBrand.ToLower()
+    switch ($lower) {
+        'anycubic' { 
+            Write-Log "[postprint] Mapped slicer brand '$slicerBrand' -> 'ATA'"
+            return 'ATA' 
+        }
+        { $_ -match '^generic' } { 
+            Write-Log "[postprint] Mapped generic brand '$slicerBrand' to empty (will use fuzzy matching)"
+            return '' 
+        }
+        'default' { 
+            Write-Log "[postprint] Mapped generic brand '$slicerBrand' to empty (will use fuzzy matching)"
+            return '' 
+        }
+    }
+    
+    return $slicerBrand
+}
+
 function Find-Filament {
     param([string]$mat, [string]$col, [string]$br)
+    
+    # Try exact match first
     $query = @{}
     if ($mat) { $query.material = $mat }
     if ($col) { $query.color = $col }
@@ -61,13 +88,67 @@ function Find-Filament {
     $url = "$HostLAN/api/filaments/search?$q"
     try {
         $res = Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
-        return $res
+        if ($res -and $res.matches -and $res.count -gt 0) { return $res }
     } catch {
         # Fallback to localhost if LAN URL fails
-        $url = "$HostLocal/api/filaments/search?$q"
-        $resLocal = Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
-        return $resLocal
+        try {
+            $url = "$HostLocal/api/filaments/search?$q"
+            $resLocal = Invoke-RestMethod -Method GET -Uri $url -TimeoutSec 5
+            if ($resLocal -and $resLocal.matches -and $resLocal.count -gt 0) { return $resLocal }
+        } catch { }
     }
+
+    # If exact match failed, try fuzzy matching by removing brand and searching by material+color only
+    if ($mat -or $col) {
+        Write-Log "[postprint] Exact match failed, trying material+color only (ignoring brand '$br')"
+        $fuzzyQuery = @{}
+        if ($mat) { $fuzzyQuery.material = $mat }
+        if ($col) { $fuzzyQuery.color = $col }
+        
+        $fq = ($fuzzyQuery.GetEnumerator() | ForEach-Object { "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value) }) -join '&'
+        
+        $furl = "$HostLAN/api/filaments/search?$fq"
+        try {
+            $fres = Invoke-RestMethod -Method GET -Uri $furl -TimeoutSec 5
+            if ($fres -and $fres.matches -and $fres.count -gt 0) { 
+                Write-Log "[postprint] Found fuzzy match: ignoring brand mismatch"
+                return $fres 
+            }
+        } catch {
+            try {
+                $furl = "$HostLocal/api/filaments/search?$fq"
+                $fresLocal = Invoke-RestMethod -Method GET -Uri $furl -TimeoutSec 5
+                if ($fresLocal -and $fresLocal.matches -and $fresLocal.count -gt 0) { 
+                    Write-Log "[postprint] Found fuzzy match (localhost): ignoring brand mismatch"
+                    return $fresLocal 
+                }
+            } catch { }
+        }
+    }
+
+    # If still no match, try material-only as last resort
+    if ($mat) {
+        Write-Log "[postprint] Material+color match failed, trying material-only ('$mat')"
+        $matUrl = "$HostLAN/api/filaments/search?material=" + [uri]::EscapeDataString($mat)
+        try {
+            $matRes = Invoke-RestMethod -Method GET -Uri $matUrl -TimeoutSec 5
+            if ($matRes -and $matRes.matches -and $matRes.count -gt 0) { 
+                Write-Log "[postprint] Found material-only match (first available $mat spool)"
+                return $matRes 
+            }
+        } catch {
+            try {
+                $matUrl = "$HostLocal/api/filaments/search?material=" + [uri]::EscapeDataString($mat)
+                $matResLocal = Invoke-RestMethod -Method GET -Uri $matUrl -TimeoutSec 5
+                if ($matResLocal -and $matResLocal.matches -and $matResLocal.count -gt 0) { 
+                    Write-Log "[postprint] Found material-only match (localhost, first available $mat spool)"
+                    return $matResLocal 
+                }
+            } catch { }
+        }
+    }
+
+    return $null
 }
 
 function Use-Filament {
@@ -220,12 +301,18 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
 }
 
 $grams = Resolve-Grams -g $used_g -mm3 $used_mm3 -dens $density -mat $material
-Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
+
+# Map slicer brand names to inventory brand names
+$originalBrand = $brand
+$brand = Map-BrandName -slicerBrand $brand
+
+Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (original brand: '$originalBrand', from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
 
 $response = Find-Filament -mat $material -col $color -br $brand
 if (-not $response -or -not $response.matches -or $response.count -eq 0) {
-    Write-Warning "No matching filament found. Ensure inventory contains this material/color/brand."
-    Write-Log "[postprint] No matches for material='$material' color='$color' brand='$brand'"
+    Write-Warning "No matching filament found in inventory."
+    Write-Log "[postprint] No matches found for material='$material' color='$color' brand='$brand' (tried exact, fuzzy material+color, and material-only)"
+    Write-Log "[postprint] Suggestion: Check your inventory has filaments with material '$material'. Brand names from slicer ('$brand') may not match inventory."
     exit 0
 }
 
