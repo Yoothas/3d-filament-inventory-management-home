@@ -74,6 +74,39 @@ function Map-BrandName {
     return $slicerBrand
 }
 
+# Map common slicer color names to actual inventory colors
+function Map-ColorName {
+    param([string]$slicerColor)
+    if (-not $slicerColor) { return $slicerColor }
+    
+    # Case-insensitive mapping
+    $lower = $slicerColor.ToLower()
+    switch ($lower) {
+        'clear' { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent'"
+            return 'Translucent' 
+        }
+        'transparent' { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent'"
+            return 'Translucent' 
+        }
+        'natural' { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent'"
+            return 'Translucent' 
+        }
+        { $_ -match '^light.?gr[ae]y' } { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent' (light gray variant)"
+            return 'Translucent' 
+        }
+        { $_ -match '^gr[ae]y' } { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' might be translucent - trying exact match first"
+            return $slicerColor  # Try exact first, fuzzy matching will handle fallback
+        }
+    }
+    
+    return $slicerColor
+}
+
 function Find-Filament {
     param([string]$mat, [string]$col, [string]$br)
     
@@ -123,6 +156,34 @@ function Find-Filament {
                     return $fresLocal 
                 }
             } catch { }
+        }
+
+        # If material+color failed and color looks like it might be translucent/clear variants, try with "Translucent"
+        if ($col -and ($col -match '^gr[ae]y|silver|clear|transparent|natural|white' -and $col -notmatch 'translucent')) {
+            Write-Log "[postprint] Trying color variant: '$col' -> 'Translucent' for material '$mat'"
+            $altQuery = @{}
+            if ($mat) { $altQuery.material = $mat }
+            $altQuery.color = 'Translucent'
+            
+            $aq = ($altQuery.GetEnumerator() | ForEach-Object { "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value) }) -join '&'
+            
+            $aurl = "$HostLAN/api/filaments/search?$aq"
+            try {
+                $ares = Invoke-RestMethod -Method GET -Uri $aurl -TimeoutSec 5
+                if ($ares -and $ares.matches -and $ares.count -gt 0) { 
+                    Write-Log "[postprint] Found color variant match: '$col' matched as 'Translucent'"
+                    return $ares 
+                }
+            } catch {
+                try {
+                    $aurl = "$HostLocal/api/filaments/search?$aq"
+                    $aresLocal = Invoke-RestMethod -Method GET -Uri $aurl -TimeoutSec 5
+                    if ($aresLocal -and $aresLocal.matches -and $aresLocal.count -gt 0) { 
+                        Write-Log "[postprint] Found color variant match (localhost): '$col' matched as 'Translucent'"
+                        return $aresLocal 
+                    }
+                } catch { }
+            }
         }
     }
 
@@ -302,11 +363,13 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
 
 $grams = Resolve-Grams -g $used_g -mm3 $used_mm3 -dens $density -mat $material
 
-# Map slicer brand names to inventory brand names
+# Map slicer names to inventory names
 $originalBrand = $brand
+$originalColor = $color
 $brand = Map-BrandName -slicerBrand $brand
+$color = Map-ColorName -slicerColor $color
 
-Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (original brand: '$originalBrand', from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
+Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (original: brand='$originalBrand' color='$originalColor', from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
 
 $response = Find-Filament -mat $material -col $color -br $brand
 if (-not $response -or -not $response.matches -or $response.count -eq 0) {
