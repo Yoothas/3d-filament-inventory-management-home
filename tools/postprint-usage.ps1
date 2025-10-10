@@ -183,7 +183,7 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
                 } catch { }
             }
             if ($matLine) {
-                $material = ($matLine -replace '^;\s*filament_type\s*=\s*', '').Trim(' "\'')
+                $material = ($matLine -replace '^;\s*filament_type\s*=\s*', '').Trim(' "''')
                 if ($material -match ',') { $material = $material.Split(',')[0].Trim() }
             }
         }
@@ -196,7 +196,7 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
                 } catch { }
             }
             if ($colLine) {
-                $color = ($colLine -replace '^;\s*filament_colou?r\s*=\s*', '').Trim(' "\'')
+                $color = ($colLine -replace '^;\s*filament_colou?r\s*=\s*', '').Trim(' "''')
                 if ($color -match ',') { $color = $color.Split(',')[0].Trim() }
             }
         }
@@ -209,7 +209,7 @@ if ($gcode -and (Test-Path -LiteralPath $gcode)) {
                 } catch { }
             }
             if ($brandLine) {
-                $brand = ($brandLine -replace '^;\s*filament_vendor\s*=\s*', '').Trim(' "\'')
+                $brand = ($brandLine -replace '^;\s*filament_vendor\s*=\s*', '').Trim(' "''')
                 if ($brand -match ',') { $brand = $brand.Split(',')[0].Trim() }
             }
         }
