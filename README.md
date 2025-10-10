@@ -110,10 +110,10 @@ The script will scan both the first ~500 lines and the last ~500 lines of the G-
 Important: To ensure usage is deducted only after a print actually finishes, configure this as an "After Print" hook if your workflow supports it (e.g., printer host like OctoPrint/Klipper). If you can only hook after slicing in your slicer, the UI will still reflect the change once the post-print script runs at print completion (recommended via printer host). If a print fails, the script will still deduct the grams it parsed from the G-code you provided; for truly precise failed-print tracking, use a host-side completion hook that passes the actual printed time/used grams if available.
 
 **Smart Filament Matching:**
-- The script automatically maps common slicer brand names (e.g., "Anycubic" → "ATA")
-- If exact brand match fails, it tries material+color only (ignoring brand mismatches)
-- As last resort, it matches any spool of the same material type
-- This handles cases where your slicer shows "Anycubic PLA" but your inventory has "ATA PLA"
+- **Brand Mapping**: "Anycubic" → "ATA", "Generic" → fuzzy match any brand
+- **Color Mapping**: "Clear"/"Transparent"/"Natural"/"Light Gray" → "Translucent"
+- **Fuzzy Fallbacks**: Exact match → Material+Color → Color variants → Material-only
+- This handles cases where your slicer shows "Anycubic Clear PLA" but your inventory has "ATA Translucent PLA"
 
 Notes:
 - If your slicer provides `${filament_used_mm3}`, the script will convert to grams. You can override density via `-density 1.24` (PLA default), e.g. PETG 1.27, ABS 1.04.
