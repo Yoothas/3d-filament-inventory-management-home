@@ -1,8 +1,8 @@
 param(
+    [Parameter(Mandatory=$false, Position=0)][string]$gcode,
     [Parameter(Mandatory=$false)][double]$used_g,
     [Parameter(Mandatory=$false)][double]$used_mm3,
     [Parameter(Mandatory=$false)][double]$density,
-    [Parameter(Mandatory=$false)][string]$gcode,
     [Parameter(Mandatory=$false)][string]$material,
     [Parameter(Mandatory=$false)][string]$color,
     [Parameter(Mandatory=$false)][string]$brand,
@@ -250,7 +250,7 @@ function Resolve-Grams {
     throw "Either -used_g or -used_mm3 must be provided."
 }
 
-# Try detect G-code path if not explicitly provided
+# G-code path can come from first parameter or remaining args
 if (-not $gcode -and $args.Count -gt 0) {
     if (Test-Path -LiteralPath $args[0]) { $gcode = $args[0] }
 }
