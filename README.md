@@ -1,6 +1,12 @@
 # 3D Filament Inventory System
 
-A local web-based inventory management system for tracking 3D printing filament spools. Built with Node.js and Express, designed to run locally and be accessible to multiple users on the same network.
+A local web-based inventory management system for tracking 3D printing filament sTroubleshooting:
+- If PowerShell script execution is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+- **Template Errors**: If you see "Non-integer index is not allowed" or "Processing of the filename_format template failed", avoid variables like `{filament_type[initial_tool]}`. Use only the script path: `D:\VSCode\tools\postprint-usage.bat`
+- **Script Not Found**: Use absolute paths with backslashes, not forward slashes. Remove any trailing quotes.
+- Check that your filament inventory contains matching Material/Color/Brand
+- Watch the command line output in Slicer's post-processing log for details
+- Enable logging by setting `FILAMENT_POSTPRINT_LOG=1` and review the log for parsed values and API responses. Built with Node.js and Express, designed to run locally and be accessible to multiple users on the same network.
 
 ## Features
 
@@ -89,7 +95,14 @@ Option B — reference a script file (recommended if you see "configured post-pr
 If your slicer errors with "Non-integer index is not allowed to address a vector variable" (e.g., using `${filament_type[initial_tool]}`), avoid non-numeric indices. Either use `[0]` for single-material, or use this ultra-simple command that needs only the G-code file path and parses the header automatically:
 
 ```
-"${project_path}/tools/postprint-usage.cmd" "${output_filepath}"
+D:\VSCode\tools\postprint-usage.bat
+```
+
+**Recommended**: Use the absolute path with NO variables to avoid template errors. The script will automatically receive the G-code path and parse all needed information from the file headers.
+
+Alternative with G-code path (if the above doesn't work):
+```
+"D:\VSCode\tools\postprint-usage.bat" "{output_filepath}"
 ```
 
 The script will scan both the first ~500 lines and the last ~500 lines of the G-code (and will fall back to a fast full-file search) to extract material/color/brand and filament used (grams or cm³), then call the API. You can still override values explicitly with flags if needed.
@@ -145,12 +158,11 @@ Troubleshooting:
 ## Network Sharing
 
 To share with roommates or others on your network:
-Real 
-1. "$env:PATH += ";C:\Program Files\nodejs"; npm start"
-2. Start the server (`npm start`)
-3. Find your computer's IP address
-4. Share the URL: `http://YOUR_IP_ADDRESS:3000`
-5. Others can access it directly in their browsers
+ 
+1. Start the server: `npm start` (add Node to PATH first if needed: `$env:PATH += ";C:\Program Files\nodejs"`)
+2. Find your computer's IP address (`ipconfig` on Windows)
+3. Share the URL: `http://YOUR_IP_ADDRESS:3000`
+4. Others can access it directly in their browsers
 
 **Example:**
 If your IP is `192.168.1.100`, share: `http://192.168.1.100:3000`
@@ -267,7 +279,7 @@ Edit the material options in both `index.html` and `script.js` to add custom fil
 
 ## Future Printer Integration
 
-### When Your Kobra 2 Pro + AMS Arrives
+### Anycubic Kobra S1 Pro + AMS 
 
 **Slicer Setup (Anycubic Slicer):**
 1. Enable post-processing scripts in slicer settings
