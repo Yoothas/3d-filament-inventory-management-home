@@ -94,6 +94,7 @@ function Map-ColorName {
             Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent'"
             return 'Translucent' 
         }
+
         { $_ -match '^light.?gr[ae]y' } { 
             Write-Log "[postprint] Mapped slicer color '$slicerColor' -> 'Translucent' (light gray variant)"
             return 'Translucent' 
@@ -101,6 +102,10 @@ function Map-ColorName {
         { $_ -match '^gr[ae]y' } { 
             Write-Log "[postprint] Mapped slicer color '$slicerColor' might be translucent - trying exact match first"
             return $slicerColor  # Try exact first, fuzzy matching will handle fallback
+        }
+        { $_ -match '^white' -and $_ -notmatch 'snow|pure|bright' } { 
+            Write-Log "[postprint] Mapped slicer color '$slicerColor' might be translucent - trying exact match first"
+            return $slicerColor  # Some "White" filaments are actually translucent
         }
     }
     
@@ -158,7 +163,7 @@ function Find-Filament {
             } catch { }
         }
 
-        # If material+color failed and color looks like it might be translucent/clear variants, try with "Translucent"
+            # If material+color failed and color looks like it might be translucent/clear variants, try with "Translucent"
         if ($col -and ($col -match '^gr[ae]y|silver|clear|transparent|natural|white' -and $col -notmatch 'translucent')) {
             Write-Log "[postprint] Trying color variant: '$col' -> 'Translucent' for material '$mat'"
             $altQuery = @{}
@@ -181,6 +186,31 @@ function Find-Filament {
                     if ($aresLocal -and $aresLocal.matches -and $aresLocal.count -gt 0) { 
                         Write-Log "[postprint] Found color variant match (localhost): '$col' matched as 'Translucent'"
                         return $aresLocal 
+                    }
+                } catch { }
+            }
+        }
+
+        # Special case: If no color provided or color is very generic, and we have PLA, try translucent PLA (common for basic/generic filaments)
+        if ($mat -and $mat -match '^PLA$' -and (-not $col -or $col -match '^(|PLA|Generic|Basic|Default|Standard)$')) {
+            Write-Log "[postprint] Trying PLA with missing/generic color -> 'Translucent' (material '$mat', color '$col')"
+            $basicQuery = @{ material = $mat; color = 'Translucent' }
+            $bq = ($basicQuery.GetEnumerator() | ForEach-Object { "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value) }) -join '&'
+            
+            $burl = "$HostLAN/api/filaments/search?$bq"
+            try {
+                $bres = Invoke-RestMethod -Method GET -Uri $burl -TimeoutSec 5
+                if ($bres -and $bres.matches -and $bres.count -gt 0) { 
+                    Write-Log "[postprint] Found generic PLA match: assumed 'Translucent'"
+                    return $bres 
+                }
+            } catch {
+                try {
+                    $burl = "$HostLocal/api/filaments/search?$bq"
+                    $bresLocal = Invoke-RestMethod -Method GET -Uri $burl -TimeoutSec 5
+                    if ($bresLocal -and $bresLocal.matches -and $bresLocal.count -gt 0) { 
+                        Write-Log "[postprint] Found generic PLA match (localhost): assumed 'Translucent'"
+                        return $bresLocal 
                     }
                 } catch { }
             }
@@ -402,10 +432,18 @@ $grams = Resolve-Grams -g $used_g -mm3 $used_mm3 -dens $density -mat $material
 # Map slicer names to inventory names
 $originalBrand = $brand
 $originalColor = $color
+$originalMaterial = $material
+
 $brand = Map-BrandName -slicerBrand $brand
 $color = Map-ColorName -slicerColor $color
 
-Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (original: brand='$originalBrand' color='$originalColor', from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
+# Map PLA variants to just "PLA" for inventory matching
+if ($material -match '^PLA\s+(Basic|Plus|Hyper\s*Speed|Pro|Standard|Premium)') {
+    Write-Log "[postprint] Mapped material '$material' -> 'PLA' (variant: $($matches[1]))"
+    $material = 'PLA'
+}
+
+Write-Log "[postprint] Looking up filament for material='$material' color='$color' brand='$brand' grams=$grams (original: material='$originalMaterial' brand='$originalBrand' color='$originalColor', from used_g=$used_g, used_mm3=$used_mm3, density=$density)"
 
 $response = Find-Filament -mat $material -col $color -br $brand
 if (-not $response -or -not $response.matches -or $response.count -eq 0) {
