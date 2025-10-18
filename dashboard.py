@@ -177,7 +177,15 @@ def sort_filaments(filaments: List[Dict[str, Any]], sort_key: str) -> List[Dict[
         return filaments
 
     if sort_key == "lastUsed":
-        return sorted(filaments, key=lambda x: x.get('lastUsed') or '', reverse=True)
+        # Sort by most recent activity (either lastUsed or updatedAt)
+        # This treats manual weight adjustments as "recent activity"
+        def get_most_recent_activity(fil: Dict[str, Any]) -> str:
+            last_used = fil.get('lastUsed') or ''
+            updated_at = fil.get('updatedAt') or ''
+            # Return the most recent timestamp between lastUsed and updatedAt
+            return max(last_used, updated_at) if last_used and updated_at else (last_used or updated_at)
+        
+        return sorted(filaments, key=get_most_recent_activity, reverse=True)
     if sort_key == "usage":
         return sorted(filaments, key=lambda x: used_weight(x), reverse=True)
     if sort_key == "usage_asc":
