@@ -4,7 +4,7 @@ QUICK REFERENCE - Hex Color Detection Fix
 Print this out or keep it handy!
 """
 
-print("""
+print(r"""
 ╔════════════════════════════════════════════════════════════════════════════╗
 ║           HEX COLOR DETECTION FIX - QUICK REFERENCE CARD                  ║
 ╚════════════════════════════════════════════════════════════════════════════╝

@@ -118,7 +118,7 @@ try:
         print(f"{i:2} | {hex_code} | ({r:3},{g:3},{b:3}) | {description:30} | {result_str:20} {status}")
     
     print("\n" + "─" * 90)
-    print("""
+    print(r"""
 ✓ = Result matches expected behavior
 ❌ = Unexpected result (investigate)
 

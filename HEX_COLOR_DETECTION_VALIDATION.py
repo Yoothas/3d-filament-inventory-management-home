@@ -4,7 +4,7 @@ VALIDATION CHECKLIST - Hex Color Detection Fix
 Use this to verify the fix is working correctly
 """
 
-print("""
+print(r"""
 ╔════════════════════════════════════════════════════════════════════════════╗
 ║     VALIDATION CHECKLIST - HEX COLOR DETECTION FIX                         ║
 ╚════════════════════════════════════════════════════════════════════════════╝
