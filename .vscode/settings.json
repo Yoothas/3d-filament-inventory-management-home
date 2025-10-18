@@ -1,0 +1,19 @@
+{
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.python",
+    "editor.rulers": [88, 100]
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/.venv": true,
+    "**/venv": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
+}
