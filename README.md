@@ -134,7 +134,7 @@ The script will automatically:
 
 ## 🌐 Network Sharing
 
-To share with roommates or others on your local network:
+To share with others on your local network:
 
 1. Start the server: `python app.py`
 2. Find your IP: `ipconfig` (Windows) or `ifconfig` (macOS/Linux)
