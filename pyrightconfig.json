@@ -11,5 +11,11 @@
   "reportOptionalSubscript": true,
   "reportConstantRedefinition": true,
   "reportInvalidTypeForm": true,
-  "reportIncompatibleMethodOverride": true
+  "reportIncompatibleMethodOverride": true,
+  "exclude": [
+    "HEX_COLOR_DETECTION_TEST.py",
+    "HEX_COLOR_DETECTION_VALIDATION.py",
+    "QUICK_REFERENCE_HEX_FIX.py"
+  ],
+  "stubPath": "."
 }

@@ -82,7 +82,7 @@ tools_dir = Path(__file__).parent / 'tools'
 sys.path.insert(0, str(tools_dir))
 
 try:
-    from postprint_usage import map_color_name
+    from postprint_usage import map_color_name  # type: ignore[import]
     
     # Test cases with expected results
     test_cases = [

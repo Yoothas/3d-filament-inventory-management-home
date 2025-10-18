@@ -12,7 +12,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import requests
@@ -36,11 +36,12 @@ def setup_logging():
             # Default log location
             base = Path.home() / '.filament-inventory'
             base.mkdir(exist_ok=True)
-            LOG_PATH = base / 'postprint.log'
+            log_path_temp = base / 'postprint.log'
         else:
             # Custom log path
-            LOG_PATH = Path(log_env)
-            LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            log_path_temp = Path(log_env)
+            log_path_temp.parent.mkdir(parents=True, exist_ok=True)
+        LOG_PATH = log_path_temp  # type: ignore[misc]
 
 
 def write_log(message: str):
@@ -382,13 +383,13 @@ def use_filament(filament_id: str, grams: float, job_name: str) -> Optional[Dict
     return None
 
 
-def parse_gcode(gcode_path: Path) -> Dict[str, any]:
+def parse_gcode(gcode_path: Path) -> Dict[str, Any]:
     """
     Parse G-code file for usage information and metadata.
     IMPORTANT: Prioritizes FOOTER data (actual usage) over HEADER data (estimates).
     This ensures we only deduct what was actually printed, not what was estimated.
     """
-    info = {
+    info: Dict[str, Any] = {
         'used_g': None,
         'used_mm3': None,
         'material': None,
