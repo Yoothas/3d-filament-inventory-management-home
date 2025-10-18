@@ -1,0 +1,8 @@
+# Flask Web Server
+Flask>=3.0.0
+requests>=2.31.0
+
+# Streamlit Dashboard (optional - for Python dashboard)
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.17.0

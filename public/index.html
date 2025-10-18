@@ -12,6 +12,8 @@
             <h1>🎯 3D Filament Inventory</h1>
             <div class="header-actions">
                 <button id="refreshBtn" class="btn btn-secondary" title="Refresh inventory">↻ Refresh</button>
+                <button id="viewArchiveBtn" class="btn btn-secondary" title="View archived spools">📦 Archive</button>
+                <button id="autoArchiveBtn" class="btn btn-secondary" title="Auto-archive empty spools">🗄️ Auto-Archive</button>
                 <button id="darkModeToggle" class="btn btn-secondary">🌙 Dark Mode</button>
                 <button id="addFilamentBtn" class="btn btn-primary">+ Add Filament</button>
             </div>
@@ -19,7 +21,7 @@
 
         <div class="stats-bar">
             <div class="stat">
-                <span class="stat-label">Total Spools:</span>
+                <span class="stat-label">Active Spools:</span>
                 <span id="totalSpools" class="stat-value">0</span>
             </div>
             <div class="stat">
@@ -29,6 +31,10 @@
             <div class="stat">
                 <span class="stat-label">Remaining Weight:</span>
                 <span id="remainingWeight" class="stat-value">0g</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Archived Spools:</span>
+                <span id="archivedCount" class="stat-value">0</span>
             </div>
         </div>
 
@@ -42,6 +48,22 @@
                 <option value="TPU">TPU</option>
                 <option value="ASA">ASA</option>
                 <option value="Other">Other</option>
+            </select>
+            <select id="sortBy">
+                <option value="">Sort by...</option>
+                <option value="lastUsed">Recently Used</option>
+                <option value="mostUsed">Most Used</option>
+                <option value="leastUsed">Least Used</option>
+                <option value="lowStock">Low Stock First</option>
+                <option value="highStock">High Stock First</option>
+                <option value="newest">Newest Purchase</option>
+                <option value="oldest">Oldest Purchase</option>
+                <option value="brand">Brand (A-Z)</option>
+                <option value="brandDesc">Brand (Z-A)</option>
+                <option value="material">Material</option>
+                <option value="color">Color (A-Z)</option>
+                <option value="costHigh">Cost (High-Low)</option>
+                <option value="costLow">Cost (Low-High)</option>
             </select>
         </div>
 
@@ -113,6 +135,21 @@
                     <button type="submit" class="btn btn-primary">Save Filament</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Archive Modal -->
+    <div id="archiveModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeArchiveModal()">&times;</span>
+            <h2>📦 Archived Spools</h2>
+            <p class="modal-subtitle">Spools that have been fully used up or manually archived</p>
+            <div id="archivedFilamentsGrid" class="filaments-grid">
+                <!-- Archived filaments will be loaded here -->
+            </div>
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="btn btn-secondary" onclick="closeArchiveModal()">Close</button>
+            </div>
         </div>
     </div>
 

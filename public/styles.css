@@ -151,6 +151,7 @@ header h1 {
     display: flex;
     gap: 15px;
     margin-bottom: 30px;
+    flex-wrap: wrap;
 }
 
 .search-bar input,
@@ -159,10 +160,19 @@ header h1 {
     border: 2px solid #ddd;
     border-radius: 6px;
     font-size: 16px;
-    flex: 1;
     background: white;
     color: #333;
     transition: all 0.3s ease;
+}
+
+.search-bar input {
+    flex: 2;
+    min-width: 250px;
+}
+
+.search-bar select {
+    flex: 1;
+    min-width: 180px;
 }
 
 .dark-mode .search-bar input,
@@ -554,4 +564,46 @@ header h1 {
     .filament-actions {
         justify-content: center;
     }
+}
+
+/* Archive Styles */
+.archive-badge {
+    background-color: #6c757d;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.filament-card.archived {
+    border-color: #6c757d;
+    opacity: 0.9;
+}
+
+.filament-card.archived .filament-header {
+    background-color: #f8f9fa;
+}
+
+.dark-mode .filament-card.archived .filament-header {
+    background-color: #343a40;
+}
+
+.modal-subtitle {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-bottom: 20px;
+}
+
+.dark-mode .modal-subtitle {
+    color: #adb5bd;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800;
 }
