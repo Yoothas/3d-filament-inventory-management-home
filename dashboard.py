@@ -3,6 +3,7 @@ import json
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+from typing import Any, Dict, List
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -36,7 +37,7 @@ st.markdown("""
 DATA_FILE = Path(__file__).parent / 'data' / 'filaments.json'
 
 @st.cache_data(show_spinner=False)
-def load_filaments():
+def load_filaments() -> List[Dict[str, Any]]:
     """Load filaments from JSON file"""
     if DATA_FILE.exists():
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -44,14 +45,14 @@ def load_filaments():
             return data if isinstance(data, list) else data.get('filaments', [])
     return []
 
-def save_filaments(filaments):
+def save_filaments(filaments: List[Dict[str, Any]]) -> None:
     """Save filaments to JSON file"""
     DATA_FILE.parent.mkdir(exist_ok=True)
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(filaments, f, indent=2)
     load_filaments.clear()
 
-def calculate_stats(filaments):
+def calculate_stats(filaments: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Calculate inventory statistics"""
     if not filaments:
         return {
@@ -83,7 +84,7 @@ def calculate_stats(filaments):
         'low_stock_count': low_stock
     }
 
-def format_filament_card(filament):
+def format_filament_card(filament: Dict[str, Any]) -> str:
     """Create a formatted card for a filament"""
     total_weight = filament.get('weight') or 0
     remaining_weight = filament.get('remainingWeight') or 0
@@ -109,7 +110,7 @@ def format_filament_card(filament):
     """
 
 
-def remaining_ratio(filament: dict) -> float:
+def remaining_ratio(filament: Dict[str, Any]) -> float:
     """Return remaining weight ratio between 0 and 1."""
     weight = filament.get('weight') or 0
     if weight <= 0:
@@ -119,13 +120,22 @@ def remaining_ratio(filament: dict) -> float:
     return max(min(remaining / weight, 1.0), 0.0)
 
 
-def used_weight(filament: dict) -> float:
+def used_weight(filament: Dict[str, Any]) -> float:
+    """Calculate weight used from a filament."""
     weight = filament.get('weight') or 0
     remaining = filament.get('remainingWeight') or 0
     return max(weight - remaining, 0)
 
 
-def filter_filaments(all_filaments, view_mode, selected_material, selected_brand, search_query, low_stock_only):
+def filter_filaments(
+    all_filaments: List[Dict[str, Any]],
+    view_mode: str,
+    selected_material: str,
+    selected_brand: str,
+    search_query: str,
+    low_stock_only: bool
+) -> List[Dict[str, Any]]:
+    """Filter filaments based on criteria."""
     filtered = []
     search_lower = (search_query or '').lower()
 
@@ -161,7 +171,8 @@ def filter_filaments(all_filaments, view_mode, selected_material, selected_brand
     return filtered
 
 
-def sort_filaments(filaments, sort_key):
+def sort_filaments(filaments: List[Dict[str, Any]], sort_key: str) -> List[Dict[str, Any]]:
+    """Sort filaments based on the specified key."""
     if not filaments:
         return filaments
 
@@ -216,11 +227,11 @@ def main():
     stats = calculate_stats(active_filaments)
     
     # Material filter
-    materials = sorted({f.get('material') for f in all_filaments if f.get('material')})
+    materials = sorted({f.get('material') for f in all_filaments if f.get('material')})  # type: ignore
     selected_material = st.sidebar.selectbox("Filter by Material", ["All"] + materials)
     
     # Brand filter
-    brands = sorted({f.get('brand') for f in all_filaments if f.get('brand')})
+    brands = sorted({f.get('brand') for f in all_filaments if f.get('brand')})  # type: ignore
     selected_brand = st.sidebar.selectbox("Filter by Brand", ["All"] + brands)
     
     # Search

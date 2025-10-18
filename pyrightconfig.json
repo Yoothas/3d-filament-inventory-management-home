@@ -1,0 +1,15 @@
+{
+  "typeCheckingMode": "standard",
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownVariableType": false,
+  "reportPartiallyUnknownFunctionType": false,
+  "reportGeneralTypeIssues": true,
+  "reportOptionalMemberAccess": true,
+  "reportOptionalSubscript": true,
+  "reportConstantRedefinition": true,
+  "reportInvalidTypeForm": true,
+  "reportIncompatibleMethodOverride": true
+}
