@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 import json
 import os
 from datetime import datetime
 from pathlib import Path
 
-app = Flask(__name__, static_folder='public')
+app = Flask(__name__)
 
 # Configuration
 PORT = int(os.environ.get('PORT', 5000))  # Default to 5000 (3000 may be restricted on Windows)
@@ -45,14 +45,16 @@ def write_filaments(filaments):
 # Routes
 @app.route('/')
 def index():
-    """Serve the main HTML page"""
-    return send_from_directory('public', 'index.html')
-
-
-@app.route('/<path:path>')
-def static_files(path):
-    """Serve static files"""
-    return send_from_directory('public', path)
+    """Simple health endpoint for quick checks"""
+    return jsonify({
+        'status': 'ok',
+        'message': '3D Filament Inventory API running',
+        'endpoints': {
+            'filaments': '/api/filaments',
+            'search': '/api/filaments/search',
+            'usage': '/api/filaments/<id>/use'
+        }
+    })
 
 
 # API Routes

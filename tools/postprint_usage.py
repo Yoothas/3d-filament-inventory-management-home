@@ -107,9 +107,29 @@ def map_color_name(slicer_color: Optional[str]) -> Optional[str]:
         g = int(hex_code[3:5], 16)
         b = int(hex_code[5:7], 16)
         
-        # Determine color based on RGB values
-        # Black: low RGB values
-        if r < 40 and g < 40 and b < 40:
+        # Calculate how close to grayscale this is
+        rgb_values = [r, g, b]
+        max_diff = max(rgb_values) - min(rgb_values)
+        is_grayscale = max_diff < 30  # RGB values are very similar
+        
+        write_log(f"[postprint] Hex {hex_code} RGB analysis: R={r} G={g} B={b}, max_diff={max_diff}, is_grayscale={is_grayscale}")
+        
+        # If NOT grayscale, it's likely a multi-color filament - don't try to name it
+        if not is_grayscale:
+            write_log(f"[postprint] Hex {hex_code} is NOT pure grayscale - likely multi-color filament, will use material-only matching")
+            return None
+        
+        # For grayscale colors, determine brightness
+        brightness = (r + g + b) / 3  # Average brightness 0-255
+        
+        # Very dark (likely printed from multi-color dark side): be conservative
+        # #212721 is RGB(33,39,33) with brightness ~36 - this could be multi-color
+        if brightness < 50:
+            write_log(f"[postprint] Hex {hex_code} very dark (brightness={brightness:.0f}) - could be multi-color, will use material-only matching")
+            return None
+        
+        # Pure Black: very specific threshold
+        if r < 25 and g < 25 and b < 25:
             write_log(f"[postprint] Hex {hex_code} -> 'Black' (RGB: {r},{g},{b})")
             return 'Black'
         
@@ -133,13 +153,13 @@ def map_color_name(slicer_color: Optional[str]) -> Optional[str]:
             write_log(f"[postprint] Hex {hex_code} -> 'Blue' (RGB: {r},{g},{b})")
             return 'Blue'
         
-        # Gray: similar RGB values
-        if abs(r - g) < 30 and abs(g - b) < 30 and abs(r - b) < 30:
-            if r < 100:
-                write_log(f"[postprint] Hex {hex_code} -> 'Dark Gray' (RGB: {r},{g},{b})")
+        # Gray: similar RGB values and mid brightness
+        if is_grayscale:
+            if brightness < 100:
+                write_log(f"[postprint] Hex {hex_code} -> 'Dark Gray' (RGB: {r},{g},{b}), brightness={brightness:.0f}")
                 return 'Dark Gray'
-            elif r < 180:
-                write_log(f"[postprint] Hex {hex_code} -> 'Gray' (RGB: {r},{g},{b})")
+            elif brightness < 180:
+                write_log(f"[postprint] Hex {hex_code} -> 'Gray' (RGB: {r},{g},{b}), brightness={brightness:.0f}")
                 return 'Gray'
         
         # If we can't determine the color, return None to use material-only matching
@@ -210,18 +230,33 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
         matches = result.get('matches', [])
         write_log(f"[postprint] Found {len(matches)} matches, selecting best match")
         
-        # Scoring system: exact color match > recent usage > remaining weight
+        # Scoring system: exact color match > multi-color detection > recent usage > remaining weight
         best_match = None
         best_score = -1
         
         for match in matches:
             score = 0
             
-            # Exact color match (not multi-color like "Black Red")
+            # Exact color match (including multi-color like "Black Red")
             match_color = match.get('color', '').lower()
             if color and color.lower() == match_color:
                 score += 100
                 write_log(f"[postprint] Exact color match: '{match_color}' (+100 points)")
+            
+            # Multi-color detection: if searching for multi-color, prefer multi-color matches
+            if color and ' ' in color.lower() and ' ' in match_color:
+                # Both are multi-color - check how many words match
+                search_words = set(color.lower().split())
+                match_words = set(match_color.lower().split())
+                matching_words = len(search_words & match_words)
+                total_words = len(search_words | match_words)
+                
+                if matching_words > 0:
+                    similarity = (matching_words / total_words) * 100
+                    score += int(similarity)
+                    write_log(f"[postprint] Multi-color similarity for '{match_color}': {matching_words}/{len(search_words)} words match ({similarity:.0f}%) (+{int(similarity)} points)")
+            
+            # Single-word color containing search term
             elif color and color.lower() in match_color and ' ' not in match_color:
                 score += 50  # Single-word color containing search term
                 write_log(f"[postprint] Partial color match: '{match_color}' (+50 points)")

@@ -35,11 +35,11 @@ st.markdown("""
 # Data file path
 DATA_FILE = Path(__file__).parent / 'data' / 'filaments.json'
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_filaments():
     """Load filaments from JSON file"""
     if DATA_FILE.exists():
-        with open(DATA_FILE, 'r') as f:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data if isinstance(data, list) else data.get('filaments', [])
     return []
@@ -47,9 +47,9 @@ def load_filaments():
 def save_filaments(filaments):
     """Save filaments to JSON file"""
     DATA_FILE.parent.mkdir(exist_ok=True)
-    with open(DATA_FILE, 'w') as f:
+    with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(filaments, f, indent=2)
-    st.cache_data.clear()
+    load_filaments.clear()
 
 def calculate_stats(filaments):
     """Calculate inventory statistics"""
@@ -62,10 +62,18 @@ def calculate_stats(filaments):
             'low_stock_count': 0
         }
     
-    total_weight = sum(f['weight'] for f in filaments)
-    remaining_weight = sum(f['remainingWeight'] for f in filaments)
-    total_value = sum(f.get('cost', 0) * (f['remainingWeight'] / f['weight']) for f in filaments)
-    low_stock = sum(1 for f in filaments if (f['remainingWeight'] / f['weight']) < 0.2)
+    total_weight = sum(f.get('weight') or 0 for f in filaments)
+    remaining_weight = sum(f.get('remainingWeight') or 0 for f in filaments)
+
+    total_value = 0
+    low_stock = 0
+    for filament in filaments:
+        weight = filament.get('weight') or 0
+        remaining = filament.get('remainingWeight') or 0
+        if weight > 0:
+            total_value += (filament.get('cost', 0) or 0) * (remaining / weight)
+            if (remaining / weight) < 0.2:
+                low_stock += 1
     
     return {
         'total_spools': len(filaments),
@@ -77,8 +85,15 @@ def calculate_stats(filaments):
 
 def format_filament_card(filament):
     """Create a formatted card for a filament"""
-    remaining_pct = (filament['remainingWeight'] / filament['weight']) * 100
-    is_low_stock = remaining_pct < 20
+    total_weight = filament.get('weight') or 0
+    remaining_weight = filament.get('remainingWeight') or 0
+
+    if total_weight > 0:
+        remaining_pct = max(min((remaining_weight / total_weight) * 100, 100), 0)
+    else:
+        remaining_pct = 0
+
+    is_low_stock = total_weight > 0 and remaining_pct < 20
     
     card_class = 'low-stock' if is_low_stock else ''
     
@@ -92,6 +107,92 @@ def format_filament_card(filament):
         {f"<p><strong>Purchase Date:</strong> {filament.get('purchaseDate', 'N/A')}</p>" if filament.get('purchaseDate') else ''}
     </div>
     """
+
+
+def remaining_ratio(filament: dict) -> float:
+    """Return remaining weight ratio between 0 and 1."""
+    weight = filament.get('weight') or 0
+    if weight <= 0:
+        return 0.0
+    remaining = filament.get('remainingWeight') or 0
+    # Clamp to keep charts sane if the numbers drift slightly
+    return max(min(remaining / weight, 1.0), 0.0)
+
+
+def used_weight(filament: dict) -> float:
+    weight = filament.get('weight') or 0
+    remaining = filament.get('remainingWeight') or 0
+    return max(weight - remaining, 0)
+
+
+def filter_filaments(all_filaments, view_mode, selected_material, selected_brand, search_query, low_stock_only):
+    filtered = []
+    search_lower = (search_query or '').lower()
+
+    for filament in all_filaments:
+        is_archived = filament.get('archived', False)
+
+        if view_mode == "Active Spools" and is_archived:
+            continue
+        if view_mode == "Archived Spools" and not is_archived:
+            continue
+
+        if selected_material != "All" and filament.get('material') != selected_material:
+            continue
+
+        if selected_brand != "All" and filament.get('brand') != selected_brand:
+            continue
+
+        if search_lower:
+            haystack = " ".join([
+                str(filament.get('brand', '')),
+                str(filament.get('material', '')),
+                str(filament.get('color', '')),
+                str(filament.get('notes', ''))
+            ]).lower()
+            if search_lower not in haystack:
+                continue
+
+        if low_stock_only and remaining_ratio(filament) >= 0.2:
+            continue
+
+        filtered.append(filament)
+
+    return filtered
+
+
+def sort_filaments(filaments, sort_key):
+    if not filaments:
+        return filaments
+
+    if sort_key == "lastUsed":
+        return sorted(filaments, key=lambda x: x.get('lastUsed') or '', reverse=True)
+    if sort_key == "usage":
+        return sorted(filaments, key=lambda x: used_weight(x), reverse=True)
+    if sort_key == "usage_asc":
+        return sorted(filaments, key=lambda x: used_weight(x))
+    if sort_key == "stock_low":
+        return sorted(filaments, key=lambda x: remaining_ratio(x))
+    if sort_key == "stock_high":
+        return sorted(filaments, key=lambda x: remaining_ratio(x), reverse=True)
+    if sort_key == "purchase_new":
+        return sorted(filaments, key=lambda x: x.get('purchaseDate') or '1970-01-01', reverse=True)
+    if sort_key == "purchase_old":
+        return sorted(filaments, key=lambda x: x.get('purchaseDate') or '1970-01-01')
+    if sort_key == "brand":
+        return sorted(filaments, key=lambda x: x.get('brand') or '')
+    if sort_key == "brand_desc":
+        return sorted(filaments, key=lambda x: x.get('brand') or '', reverse=True)
+    if sort_key == "material":
+        return sorted(filaments, key=lambda x: x.get('material') or '')
+    if sort_key == "color":
+        return sorted(filaments, key=lambda x: x.get('color') or '')
+    if sort_key == "cost_desc":
+        return sorted(filaments, key=lambda x: x.get('cost') or 0, reverse=True)
+    if sort_key == "cost":
+        return sorted(filaments, key=lambda x: x.get('cost') or 0)
+
+    return filaments
 
 # Main app
 def main():
@@ -110,25 +211,16 @@ def main():
         index=0
     )
     
-    # Filter by archived status
-    if view_mode == "Active Spools":
-        filaments = [f for f in all_filaments if not f.get('archived', False)]
-    elif view_mode == "Archived Spools":
-        filaments = [f for f in all_filaments if f.get('archived', False)]
-    else:  # All Spools
-        filaments = all_filaments
-    
-    # Calculate stats (only active spools)
     active_filaments = [f for f in all_filaments if not f.get('archived', False)]
     archived_filaments = [f for f in all_filaments if f.get('archived', False)]
     stats = calculate_stats(active_filaments)
     
     # Material filter
-    materials = sorted(set(f['material'] for f in filaments)) if filaments else []
+    materials = sorted({f.get('material') for f in all_filaments if f.get('material')})
     selected_material = st.sidebar.selectbox("Filter by Material", ["All"] + materials)
     
     # Brand filter
-    brands = sorted(set(f['brand'] for f in filaments)) if filaments else []
+    brands = sorted({f.get('brand') for f in all_filaments if f.get('brand')})
     selected_brand = st.sidebar.selectbox("Filter by Brand", ["All"] + brands)
     
     # Search
@@ -191,77 +283,18 @@ def main():
     with col5:
         st.metric("⚠️ Low Stock", stats['low_stock_count'])
     
-    # Filter filaments
-    filtered_filaments = filaments.copy()
-    
-    if selected_material != "All":
-        filtered_filaments = [f for f in filtered_filaments if f['material'] == selected_material]
-    
-    if selected_brand != "All":
-        filtered_filaments = [f for f in filtered_filaments if f['brand'] == selected_brand]
-    
-    if search_query:
-        query_lower = search_query.lower()
-        filtered_filaments = [
-            f for f in filtered_filaments 
-            if query_lower in f['brand'].lower() 
-            or query_lower in f['material'].lower() 
-            or query_lower in f['color'].lower()
-        ]
-    
-    if show_low_stock_only:
-        filtered_filaments = [
-            f for f in filtered_filaments 
-            if (f['remainingWeight'] / f['weight']) < 0.2
-        ]
-    
-    # Sort filaments
     sort_key = sort_options[selected_sort]
-    
-    if sort_key == "lastUsed":
-        filtered_filaments.sort(
-            key=lambda x: x.get('lastUsed', '1970-01-01'), 
-            reverse=True
-        )
-    elif sort_key == "usage":
-        filtered_filaments.sort(
-            key=lambda x: x['weight'] - x['remainingWeight'], 
-            reverse=True
-        )
-    elif sort_key == "usage_asc":
-        filtered_filaments.sort(
-            key=lambda x: x['weight'] - x['remainingWeight']
-        )
-    elif sort_key == "stock_low":
-        filtered_filaments.sort(
-            key=lambda x: x['remainingWeight'] / x['weight']
-        )
-    elif sort_key == "stock_high":
-        filtered_filaments.sort(
-            key=lambda x: x['remainingWeight'] / x['weight'], 
-            reverse=True
-        )
-    elif sort_key == "purchase_new":
-        filtered_filaments.sort(
-            key=lambda x: x.get('purchaseDate', '1970-01-01'), 
-            reverse=True
-        )
-    elif sort_key == "purchase_old":
-        filtered_filaments.sort(
-            key=lambda x: x.get('purchaseDate', '1970-01-01')
-        )
-    elif sort_key == "brand":
-        filtered_filaments.sort(key=lambda x: x['brand'])
-    elif sort_key == "brand_desc":
-        filtered_filaments.sort(key=lambda x: x['brand'], reverse=True)
-    elif sort_key == "material":
-        filtered_filaments.sort(key=lambda x: x['material'])
-    elif sort_key == "color":
-        filtered_filaments.sort(key=lambda x: x['color'])
-    elif sort_key == "cost_desc":
-        filtered_filaments.sort(key=lambda x: x.get('cost', 0), reverse=True)
-    elif sort_key == "cost":
-        filtered_filaments.sort(key=lambda x: x.get('cost', 0))
+    filtered_filaments = sort_filaments(
+        filter_filaments(
+            all_filaments,
+            view_mode,
+            selected_material,
+            selected_brand,
+            search_query,
+            show_low_stock_only
+        ),
+        sort_key
+    )
     
     # Charts
     if filtered_filaments:
@@ -282,12 +315,12 @@ def main():
         
         with chart_col2:
             # Stock levels bar chart
-            df['stock_pct'] = (df['remainingWeight'] / df['weight'] * 100).round(1)
-            df['label'] = df['brand'] + ' ' + df['color']
-            
+            df['stock_pct'] = df.apply(remaining_ratio, axis=1) * 100
+            df['label'] = df['brand'].fillna('') + ' ' + df['color'].fillna('')
+
             fig = px.bar(
-                df.head(10), 
-                x='label', 
+                df.head(10),
+                x='label',
                 y='stock_pct',
                 title="Stock Levels (Top 10)",
                 labels={'label': 'Filament', 'stock_pct': 'Stock %'},
@@ -306,7 +339,7 @@ def main():
         cols = st.columns(3)
         for idx, filament in enumerate(filtered_filaments):
             with cols[idx % 3]:
-                remaining_pct = (filament['remainingWeight'] / filament['weight']) * 100
+                remaining_pct = remaining_ratio(filament) * 100
                 is_low_stock = remaining_pct < 20
                 
                 with st.container():
@@ -433,8 +466,8 @@ def main():
             new_color = st.text_input("Color *", "")
         
         with col2:
-            new_weight = st.number_input("Original Weight (g) *", min_value=0, value=1000)
-            new_remaining = st.number_input("Remaining Weight (g) *", min_value=0, value=1000)
+            new_weight = st.number_input("Original Weight (g) *", min_value=1, value=1000)
+            new_remaining = st.number_input("Remaining Weight (g) *", min_value=0, value=1000, max_value=new_weight)
             new_diameter = st.selectbox("Diameter (mm) *", [1.75, 2.85, 3.0])
         
         with col3:
@@ -460,8 +493,8 @@ def main():
                     'createdAt': datetime.now().isoformat()
                 }
                 
-                filaments.append(new_filament)
-                save_filaments(filaments)
+                all_filaments.append(new_filament)
+                save_filaments(all_filaments)
                 st.success("✅ Filament added successfully!")
                 st.rerun()
             else:

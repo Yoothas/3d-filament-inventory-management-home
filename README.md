@@ -1,178 +1,392 @@
-# 3D Filament Inventory Management System# 3D Filament Inventory System
+# 3D Filament Inventory System# 3D Filament Inventory System
 
 
+
+A local-first, **100% Python** inventory manager for 3D printing filament spools.Note: This project is now Python-only. The legacy JavaScript frontend under `public/` has been removed. Use the Streamlit dashboard as the UI and the Flask API for integrations.
+
+
+
+- **Flask API** — JSON-only REST endpoints for integrations and post-print auto-deductionQuick Start (Windows PowerShell)
+
+- **Streamlit Dashboard** — Primary user interface with charts, filtering, and CRUD operations
+
+- **Single datastore** — `data/filaments.json` shared between both interfaces1) Install dependencies
+
+- **Zero JavaScript** — Pure Python stack (Flask + Streamlit + pandas + plotly)
+
+```powershell
+
+## Quick Start (Windows PowerShell)pip install -r requirements.txt
+
+```
+
+### Prerequisites
+
+- Python 3.10+2) Start the Flask API (port 5000)
+
+- pip
+
+```powershell
+
+### 1) Install dependenciespython app.py
+
+```
+
+```powershell
+
+pip install -r requirements.txt3) Start the Streamlit dashboard (port 8501)
+
+```
+
+```powershell
+
+### 2) Start the Flask API (port 5000)streamlit run dashboard.py
+
+```
+
+```powershell
+
+python app.pyBoth share the same datastore at `data/filaments.json`.
+
+```
+
+
+
+Access health check: http://localhost:5000/
 
 A Python Flask-based inventory management system for tracking 3D printing filament spools with automatic deduction from slicer integration.A local web-based inventory management system for tracking 3D printing filament spools. Built with Python Flask, designed to run locally and be accessible to multiple users on the same network.
 
+### 3) Start the Streamlit dashboard (port 8501)
 
 
-## Features## 🎯 Two Interface Options
+
+```powershell
+
+streamlit run dashboard.py## Features## 🎯 Two Interface Options
+
+```
 
 
+
+Access UI: http://localhost:8501/
 
 ### Core FeaturesThis system provides **two ways** to manage your filament inventory:
 
+Both interfaces share the same datastore at `data/filaments.json`.
+
 - 📊 **Comprehensive Tracking**: Track brand, material, color, weight, cost, and usage
-
-- 🎯 **Visual Progress**: See remaining filament with progress bars1. **Flask Web App** (Classic) - Multi-user web interface with API endpoints
-
-- 🔍 **Smart Search**: Filter by material type or search across all fields   - Best for: Network sharing, mobile access, API automation
-
-- 📈 **Advanced Sorting**: 13+ sort options including usage, stock levels, purchase date, brand, color, and cost   - Port: 5000
-
-- 💾 **Local Storage**: All data stored locally in JSON files   - Tech: Python + JavaScript
-
-- 🤖 **Slicer Integration**: Automatic filament deduction after prints (Anycubic Slicer)
-
-- 📈 **Print History**: Track recent print jobs and filament consumption2. **Streamlit Dashboard** (New!) - 100% Python analytical dashboard
-
-- 📦 **Archive System**: Auto-archive empty spools while preserving history   - Best for: Personal use, data visualization, pure Python lovers
-
-- 🌙 **Dark Mode**: Toggle between light and dark themes   - Port: 8501  
-
-   - Tech: 100% Python (no JavaScript)
-
-### Two Interface Options
-
-**Both interfaces share the same data!** Use one, or run both simultaneously.
-
-1. **Flask Web App** (Port 5000) - Multi-user web interface
-
-   - Best for: Network sharing, mobile access📚 **See [STREAMLIT_DASHBOARD.md](STREAMLIT_DASHBOARD.md) for the pure Python option.**
-
-   - Tech: Python Flask + JavaScript
 
 ## Features
 
+- 🎯 **Visual Progress**: See remaining filament with progress bars1. **Flask Web App** (Classic) - Multi-user web interface with API endpoints
+
+- 📊 **Comprehensive Tracking** — Brand, material, color, weight, cost, and usage
+
+- 🎯 **Visual Progress** — Progress bars and progress indicators  - 🔍 **Smart Search**: Filter by material type or search across all fields   - Best for: Network sharing, mobile access, API automation
+
+- 🔍 **Smart Search** — Filter by material type, brand, color, or custom queries
+
+- 📈 **13+ Sort Options** — Usage, stock levels, purchase date, brand, color, cost, and more- 📈 **Advanced Sorting**: 13+ sort options including usage, stock levels, purchase date, brand, color, and cost   - Port: 5000
+
+- 💾 **Local Storage** — All data persists in JSON files locally
+
+- 🤖 **Slicer Integration** — Automatic filament deduction from Anycubic Slicer post-processing- 💾 **Local Storage**: All data stored locally in JSON files
+
+- 📊 **Print History** — Track recent print jobs and filament consumption per spool- 🤖 **Slicer Integration**: Automatic filament deduction after prints (Anycubic Slicer)
+
+- 📦 **Archive System** — Auto-archive empty spools (0g) while preserving full history- 📈 **Print History**: Track recent print jobs and filament consumption
+
+- 🔄 **Bulk Operations** — Multi-filament usage tracking for complex multi-material prints- 📦 **Archive System**: Auto-archive empty spools while preserving history
+
+- 🌙 **Dark Mode**: Toggle between light and dark themes
+
+## Slicer Post-Print Integration- Tech: **100% Python** (no JavaScript whatsoever)
+
+
+
+Configure Anycubic Slicer to auto-deduct filament after each print:### Two Interface Options
+
+
+
+1. Start the Flask API (step 2 above)**Both interfaces share the same data!** Use one, or run both simultaneously.
+
+2. In Anycubic Slicer: **Machine Settings** → **Scripts** → **Post-print script**
+
+3. Set the command to: `C:\3DPrint\slicer-postprint.bat`1. **Flask Web App** (Port 5000) - Multi-user web interface
+
+   - Use `tools/setup-slicer-wrapper.ps1` to install the wrapper automatically
+
+4. The script will:   - Best for: Network sharing, mobile access📚 **See [STREAMLIT_DASHBOARD.md](STREAMLIT_DASHBOARD.md) for the pure Python option.**
+
+   - Parse the latest G-code for material, color, brand, and weight used
+
+   - Call the Flask API to match and deduct filament   - Tech: Python Flask + JavaScript
+
+   - Auto-archive spools when they reach 0g remaining
+
+## Features
+
+## API Endpoints (Flask)
+
 2. **Streamlit Dashboard** (Port 8501) - 100% Python analytical dashboard
 
-   - Best for: Personal use, data visualization### Core Features (Both Interfaces)
+### Filaments
 
-   - Tech: 100% Python with interactive charts- 📊 **Comprehensive Tracking**: Track brand, material, color, weight, cost, and usage
+- `GET /api/filaments` — List all active filaments (add `?include_archived=true` for all)   - Best for: Personal use, data visualization### Core Features (Both Interfaces)
 
-- 🎯 **Visual Progress**: See remaining filament with progress bars
+- `GET /api/filaments/:id` — Get a single filament
 
-**Both interfaces share the same data!**- 🔍 **Smart Search**: Filter by material type or search across all fields
+- `POST /api/filaments` — Create a new filament   - Tech: 100% Python with interactive charts- 📊 **Comprehensive Tracking**: Track brand, material, color, weight, cost, and usage
 
-- 📈 **Advanced Sorting**: 13+ sort options including usage, stock levels, purchase date, brand, color, and cost
+- `PUT /api/filaments/:id` — Update a filament
+
+- `DELETE /api/filaments/:id` — Delete a filament- 🎯 **Visual Progress**: See remaining filament with progress bars
+
+
+
+### Usage & Search**Both interfaces share the same data!**- 🔍 **Smart Search**: Filter by material type or search across all fields
+
+- `POST /api/filaments/:id/use` — Deduct filament after print (auto-archives at 0g)
+
+- `POST /api/filaments/bulk-use` — Multi-filament usage for complex prints- 📈 **Advanced Sorting**: 13+ sort options including usage, stock levels, purchase date, brand, color, and cost
+
+- `GET /api/filaments/search?material=PLA&color=Black` — Find matching filaments
 
 ---- 💾 **Local Storage**: All data stored locally in JSON files
 
-- 🤖 **Slicer Integration**: Automatic filament deduction after prints (Anycubic Slicer)
+### Archive
 
-## Quick Start- 📈 **Print History**: Track recent print jobs and filament consumption
+- `POST /api/filaments/:id/archive` — Archive a spool- 🤖 **Slicer Integration**: Automatic filament deduction after prints (Anycubic Slicer)
+
+- `POST /api/filaments/:id/unarchive` — Restore an archived spool
+
+- `GET /api/filaments/archived` — List all archived spools## Quick Start- 📈 **Print History**: Track recent print jobs and filament consumption
+
+- `POST /api/filaments/auto-archive` — Archive all empty spools at once
 
 - 🔄 **Bulk Operations**: Multi-filament usage tracking for complex prints
 
+## Project Structure
+
 ### 1. Install Dependencies- 📦 **Archive System**: Auto-archive empty spools while preserving history (NEW!)
 
+```
 
+3d-filament-inventory-management-home/
 
-```bash### Flask Web App Features
+├── app.py                      # Flask API (JSON only, no static serving)
 
-pip install -r requirements.txt- �📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
+├── dashboard.py                # Streamlit UI (primary interface)```bash### Flask Web App Features
 
-```- 🌐 **Network Access**: Share with roommates or others on your local network
+├── data/
 
-- ⚡ **Real-time Updates**: Instant updates across all connected browsers
+│   └── filaments.json          # JSON datastore (single source of truth)pip install -r requirements.txt- �📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
 
-### 2. Start the Server- 🌙 **Dark Mode**: Toggle between light and dark themes
+├── tools/
 
-- 🔌 **REST API**: Full API for automation and integrations
+│   ├── postprint_usage.py      # Post-print auto-deduction logic```- 🌐 **Network Access**: Share with roommates or others on your local network
+
+│   ├── postprint-wrapper.bat   # Windows batch wrapper for slicers
+
+│   ├── setup-slicer-wrapper.ps1 # Helper to install wrapper at C:\3DPrint- ⚡ **Real-time Updates**: Instant updates across all connected browsers
+
+│   └── test_postprint.py       # Regression tests for G-code parsing
+
+├── requirements.txt            # Python dependencies (Flask, Streamlit, pandas, plotly)### 2. Start the Server- 🌙 **Dark Mode**: Toggle between light and dark themes
+
+├── start-server.bat/.ps1       # Flask API launcher (Windows)
+
+└── start-dashboard.bat/.ps1    # Streamlit launcher (Windows)- 🔌 **REST API**: Full API for automation and integrations
+
+```
 
 **Option A: Flask Web App**
 
+## Configuration
+
 ```bash### Streamlit Dashboard Features  
+
+### Changing the Flask API port
 
 # Windows- 📊 **Interactive Charts**: Pie charts, bar graphs, live metrics
 
-start-server.bat- � **100% Python**: No JavaScript knowledge required
+```powershell
+
+$env:PORT=8080; python app.pystart-server.bat- � **100% Python**: No JavaScript knowledge required
+
+```
 
 - 🔄 **Auto-refresh**: Live data updates
 
+### Adding new material types
+
 # Or manually- 🎨 **Built-in Theming**: Light/dark mode with customizable colors
 
-python app.py- 📥 **Export Ready**: Easy CSV/Excel export additions
+Edit `dashboard.py` and find the line:
 
-```
+```pythonpython app.py- 📥 **Export Ready**: Easy CSV/Excel export additions
 
-## Quick Start
+new_material = st.selectbox("Material *", ["PLA", "ABS", "PETG", "TPU", "ASA", "Other"])
 
-Access at: http://localhost:5000
+``````
 
-### Option 1: Flask Web App (Multi-user)
 
-**Option B: Streamlit Dashboard**
 
-```bash#### Prerequisites
+Add your material to the list.## Quick Start
 
-# Windows
 
-start-dashboard.bat- Python 3.8 or higher
 
-- pip (Python package installer)
+## TroubleshootingAccess at: http://localhost:5000
 
-# Or manually
+
+
+### Flask API won't start### Option 1: Flask Web App (Multi-user)
+
+- Ensure Python 3.10+ is installed: `python --version`
+
+- Run `pip install -r requirements.txt`**Option B: Streamlit Dashboard**
+
+- Check for error messages in the terminal
+
+- Verify port 5000 is not in use (or set `PORT` environment variable)```bash#### Prerequisites
+
+
+
+### Streamlit won't launch# Windows
+
+- Ensure Streamlit is installed: `pip install streamlit`
+
+- Try running: `streamlit run dashboard.py --logger.level=debug`start-dashboard.bat- Python 3.8 or higher
+
+
+
+### Can't access from other devices- pip (Python package installer)
+
+- Allow inbound firewall on ports 5000 (Flask) and 8501 (Streamlit)
+
+- Ensure all devices are on the same network# Or manually
+
+- Find your IP with `ipconfig` on Windows
 
 streamlit run dashboard.py#### Installation & Setup
 
-```
+### Data not saving
+
+- Verify write permissions for the `data/` folder```
+
+- Ensure the directory is not open in another process
 
 1. **Install Dependencies**
 
+## Requirements
+
 Access at: http://localhost:8501   ```bash
 
-   pip install -r requirements.txt
+- Python 3.10+
 
----   ```
+- Flask 3.0+   pip install -r requirements.txt
+
+- Streamlit 1.28+
+
+- pandas 2.0+---   ```
+
+- plotly 5.17+
+
+- requests 2.31+
 
 
 
-## Slicer Integration (Auto-Deduct)2. **Start the Server**
+All managed in `requirements.txt`.## Slicer Integration (Auto-Deduct)2. **Start the Server**
 
-   
 
-### Quick Setup   **Easy way (Windows):**
 
-   - Double-click `start-server.bat` or run `start-server.ps1`
+## Tips & Best Practices   
+
+
+
+### Keeping the Flask server running### Quick Setup   **Easy way (Windows):**
+
+- **Option 1: Dedicated Terminal** — Keep a PowerShell window open running `python app.py`
+
+- **Option 2: Background Process** — Use `start-server.bat` to run in a separate window   - Double-click `start-server.bat` or run `start-server.ps1`
+
+- **Option 3: Task Scheduler** — Set up Windows Task Scheduler to auto-start on boot
 
 **Step 1: Start Flask Server**   
 
-```bash   **Manual way:**
+### Network sharing
 
-python app.py   ```bash
+1. Start Flask: `python app.py` or `start-server.bat````bash   **Manual way:**
+
+2. Find your IP: `ipconfig` (look for IPv4 Address)
+
+3. Share the URL: `http://YOUR_IP_ADDRESS:5000` (for API) or `http://YOUR_IP_ADDRESS:8501` (for dashboard)python app.py   ```bash
+
+4. Others can access directly in their browsers
 
 ```   python app.py
 
-   ```
+### Data management
 
-**Step 2: Configure Anycubic Slicer**   
+- All data persists in `data/filaments.json`   ```
 
-   Or with Flask's development mode:
+- Regular backups: `copy data\filaments.json data\filaments.backup.json`
 
-Go to: **Machine Settings** → **Scripts** → **Post-print script**   ```bash
+- Data survives between server restarts**Step 2: Configure Anycubic Slicer**   
 
-   flask --app app run --host=0.0.0.0 --port=5000
 
-Enter:   ```
 
-```
+## Technology Stack   Or with Flask's development mode:
 
-C:\3DPrint\slicer-postprint.bat3. **Access the Application**
 
-```   - Local access: http://localhost:5000
 
-   - Network access: http://YOUR_IP_ADDRESS:5000
+| Component | Technology | Why |Go to: **Machine Settings** → **Scripts** → **Post-print script**   ```bash
 
-That's it! The script automatically finds and processes G-code files.
+|-----------|-----------|-----|
 
-**Note:** The default port is 5000 (port 3000 may be restricted on some Windows systems). You can change it by setting the `PORT` environment variable.
+| **Backend API** | Flask (Python) | Lightweight, simple REST endpoints |   flask --app app run --host=0.0.0.0 --port=5000
+
+| **Frontend UI** | Streamlit (Python) | Interactive charts, no JavaScript needed |
+
+| **Data Layer** | JSON file | Simple, portable, no database setup |Enter:   ```
+
+| **Charts** | Plotly (Python) | Interactive visualizations in Streamlit |
+
+| **Data Processing** | pandas (Python) | Filtering, sorting, aggregation |```
+
+
+
+## LicenseC:\3DPrint\slicer-postprint.bat3. **Access the Application**
+
+
+
+MIT License — Feel free to modify and distribute as needed.```   - Local access: http://localhost:5000
+
+
+
+## Support   - Network access: http://YOUR_IP_ADDRESS:5000
+
+
+
+For issues or questions, see the documentation files:That's it! The script automatically finds and processes G-code files.
+
+- `FINAL_SLICER_SETUP.md` — Detailed slicer integration guide
+
+- `TROUBLESHOOTING.md` — Extended troubleshootingNote: The Flask API defaults to port 5000. You can change it by setting the `PORT` environment variable.
+
+- `QUICK_START.md` — Additional getting-started guide
 
 ### How It Works
 
+---
+
 ### Option 2: Streamlit Dashboard (Pure Python)
 
-1. Slicer generates G-code and saves to temp folder
+**Last Updated:** October 18, 2025  
+
+**Status:** ✅ Production Ready  1. Slicer generates G-code and saves to temp folder
+
+**Version:** 2.0 (Python Flask + Streamlit, 100% Pure Python)
 
 2. Slicer calls the post-print script#### Prerequisites
 
@@ -408,35 +622,29 @@ If you want to manually specify values, you can still use command-line arguments
 
 - `--color` - Filament color
 
-## Project Structure- `--brand` - Filament brand/vendor
-
-- `--job` - Print job name
+## Project Structure
 
 ```
+3d-filament-inventory-management-home/
+├── app.py                # Flask API backing the slicer/post-print tooling
+├── dashboard.py          # Streamlit UI (filters, charts, CRUD, archive management)
+├── data/
+│   └── filaments.json   # JSON datastore for private setups
+├── tools/
+│   ├── postprint_usage.py        # Main post-print Python script (auto-deduct logic)
+│   ├── postprint-wrapper.bat     # Wrapper for slicers that dislike spaces in paths
+│   ├── setup-slicer-wrapper.ps1  # Helper to install the wrapper at C:\3DPrint
+│   └── test_postprint.py         # Regression tests for G-code parsing logic
+├── requirements.txt       # Python dependencies (Flask, Streamlit, Plotly, requests)
+├── start-dashboard.*      # Convenience launchers for Streamlit
+└── start-server.*         # Convenience launchers for Flask API
+```
 
-3d-filament-inventory-management-home/Important: To ensure usage is deducted only after a print actually finishes, configure this as an "After Print" hook if your workflow supports it (e.g., printer host like OctoPrint/Klipper). If you can only hook after slicing in your slicer, the UI will still reflect the change once the post-print script runs at print completion (recommended via printer host). If a print fails, the script will still deduct the grams it parsed from the G-code you provided; for truly precise failed-print tracking, use a host-side completion hook that passes the actual printed time/used grams if available.
+## Smart Filament Matching
 
-├── app.py                      # Flask server
-
-├── dashboard.py                # Streamlit dashboard**Smart Filament Matching:**
-
-├── requirements.txt            # Python dependencies- **Brand Mapping**: "Anycubic" → "ATA", "Generic" → fuzzy match any brand
-
-├── data/- **Color Mapping**: "Clear"/"Transparent"/"Natural"/"Light Gray" → "Translucent"
-
-│   └── filaments.json         # Data storage- **Fuzzy Fallbacks**: Exact match → Material+Color → Color variants → Material-only
-
-├── public/- This handles cases where your slicer shows "Anycubic Clear PLA" but your inventory has "ATA Translucent PLA"
-
-│   ├── index.html             # Web interface
-
-│   ├── script.js              # Frontend logicNotes:
-
-│   └── styles.css             # Styling- If your slicer provides `${filament_used_mm3}`, the script will convert to grams. You can override density via `-density 1.24` (PLA default), e.g. PETG 1.27, ABS 1.04.
-
-├── tools/- If your slicer exposes `${filament_used_g}` directly, use that instead for `-used_g`
-
-│   └── postprint_usage.py     # Slicer integration script- For multi-material, duplicate the flags with index `[1]`, `[2]`, etc. and call the script multiple times, or switch to the bulk API.
+- **Brand mapping:** generic brands like “Anycubic” can match richer inventory entries such as “Anycubic High Speed”.
+- **Color mapping:** hex codes and variants like `Clear`, `Transparent`, or `Light Gray` are normalized to `Translucent`.
+- **Fallback order:** exact match → material+color → color variants → material-only, ensuring reliable auto-selection even with sparse slicer metadata.
 
 ├── start-server.bat/ps1       # Flask launcher
 
@@ -734,16 +942,14 @@ POST /api/filaments/bulk-use
 ```
 3d-filament-inventory/
 ├── requirements.txt      # Python dependencies
-├── app.py               # Flask server with AMS APIs
+├── app.py               # Flask server and API
+├── dashboard.py         # Streamlit dashboard (primary UI)
 ├── data/                # Data storage
 │   └── filaments.json  # Filament inventory data
-├── tools/              # Integration scripts
-│   ├── postprint_usage.py  # Python post-print script
-│   └── postprint-usage.ps1 # PowerShell script (legacy)
-└── public/             # Web interface
-    ├── index.html      # Main page with dark mode
-    ├── styles.css      # Styling with theme support
-    └── script.js       # Frontend logic + print history
+└── tools/              # Integration scripts
+   ├── postprint_usage.py      # Python post-print script
+   ├── postprint-wrapper.bat   # Slicer-friendly wrapper
+   └── setup-slicer-wrapper.ps1 # Helper to install wrapper
 ```
 
 ### API Endpoints
@@ -764,12 +970,12 @@ POST /api/filaments/bulk-use
 
 ### Server Won't Start
 - Ensure Python 3.8+ is installed: `python --version`
-- Check if port 3000 is available
+- Check if port 5000 is available (or your custom PORT)
 - Run `pip install -r requirements.txt` to install dependencies
 - Check for error messages in the console
 
 ### Can't Access from Other Devices
-- Verify your computer's firewall allows connections on port 3000
+- Verify your computer's firewall allows connections on port 5000 (Flask) and 8501 (Streamlit)
 - Ensure all devices are on the same network
 - Double-check the IP address
 
@@ -789,8 +995,11 @@ $env:PORT=8080; python app.py
 PORT=8080 python app.py
 ```
 
-### Adding New Material Types
-Edit the material options in both `index.html` and `script.js` to add custom filament types.
+### Extending the System
+
+To add new material types, edit the options in `dashboard.py`:
+
+Find the `st.selectbox("Material *", [...])` line and add your new material name to the list.
 
 ## Future Printer Integration
 
