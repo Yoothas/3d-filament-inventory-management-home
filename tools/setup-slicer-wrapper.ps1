@@ -18,8 +18,10 @@ if (-not $isAdmin) {
 # Paths
 $wrapperDir = "C:\3DPrint"
 $wrapperPath = "$wrapperDir\slicer-postprint.bat"
-$pythonPath = "D:\python 3.10\python.exe"
-$scriptPath = "D:\VSCode\Filament in python\3d-filament-inventory-management-home\tools\postprint_usage.py"
+$pythonPath = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $pythonPath) { $pythonPath = "python" }
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptPath = Join-Path (Split-Path -Parent $scriptDir) "tools\postprint_usage.py"
 
 Write-Host "📁 Creating wrapper directory..." -ForegroundColor Yellow
 
@@ -95,7 +97,7 @@ Write-Host "4. Save settings" -ForegroundColor White
 Write-Host "5. Make sure Flask server is running:" -ForegroundColor White
 Write-Host "   python app.py" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "📖 Documentation: FIXING_SLICER_PATH.md" -ForegroundColor Yellow
+Write-Host "📖 Documentation: README.md" -ForegroundColor Yellow
 Write-Host ""
 
 # Offer to copy to clipboard if possible

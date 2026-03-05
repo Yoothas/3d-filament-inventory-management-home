@@ -6,13 +6,13 @@ Can be called from slicer post-processing scripts or manually.
 """
 
 import argparse
-import json
 import os
 import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlencode
 
 try:
     import requests
@@ -65,24 +65,20 @@ def get_server_urls() -> Tuple[str, str]:
     return host_local, host_lan
 
 
+def get_auth_headers() -> Dict[str, str]:
+    """Build auth headers if FILAMENT_API_KEY is set."""
+    api_key = os.environ.get('FILAMENT_API_KEY', '')
+    if api_key:
+        return {'X-API-Key': api_key}
+    return {}
+
+
 def map_brand_name(slicer_brand: Optional[str]) -> Optional[str]:
     """Map common slicer/printer brand names to inventory brand names"""
     if not slicer_brand:
         return slicer_brand
     
     lower = slicer_brand.lower()
-    
-    # Case-insensitive mapping for specific known brands
-    # Note: Don't map generic "Anycubic" - let fuzzy matching find "Anycubic High Speed", etc.
-    brand_map = {
-        # Add specific mappings here if needed
-        # 'some_slicer_name': 'Inventory_Brand_Name',
-    }
-    
-    if lower in brand_map:
-        mapped = brand_map[lower]
-        write_log(f"[postprint] Mapped slicer brand '{slicer_brand}' -> '{mapped}'")
-        return mapped
     
     if 'generic' in lower or lower == 'default':
         write_log(f"[postprint] Ignoring generic brand '{slicer_brand}' - will use material+color matching")
@@ -123,15 +119,10 @@ def map_color_name(slicer_color: Optional[str]) -> Optional[str]:
         # For grayscale colors, determine brightness
         brightness = (r + g + b) / 3  # Average brightness 0-255
         
-        # Very dark (likely printed from multi-color dark side): be conservative
-        # #212721 is RGB(33,39,33) with brightness ~36 - this could be multi-color
-        if brightness < 50:
-            write_log(f"[postprint] Hex {hex_code} very dark (brightness={brightness:.0f}) - could be multi-color, will use material-only matching")
-            return None
-        
-        # Pure Black: very specific threshold
-        if r < 25 and g < 25 and b < 25:
-            write_log(f"[postprint] Hex {hex_code} -> 'Black' (RGB: {r},{g},{b})")
+        # Map grayscale to color names (check specific colors BEFORE generic dark threshold)
+        # Pure Black: very dark grayscale (RGB < 60 each)
+        if brightness < 60:
+            write_log(f"[postprint] Hex {hex_code} -> 'Black' (RGB: {r},{g},{b}, brightness={brightness:.0f})")
             return 'Black'
         
         # White: high RGB values
@@ -194,7 +185,7 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
     
     def try_search(url: str) -> Optional[Dict]:
         try:
-            response = requests.get(url, timeout=5)
+            response = requests.get(url, timeout=5, headers=get_auth_headers())
             response.raise_for_status()
             data = response.json()
             if data and data.get('matches') and data.get('count', 0) > 0:
@@ -213,18 +204,14 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
         params['brand'] = brand
     
     # Try exact match first
-    query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-    url = f"{host_lan}/api/filaments/search?{query_string}"
+    query_string = urlencode(params)
     
-    result = try_search(url)
-    if result:
-        return result
-    
-    # Fallback to localhost
-    url = f"{host_local}/api/filaments/search?{query_string}"
-    result = try_search(url)
-    if result:
-        return result
+    result = None
+    for base_url in [host_lan, host_local]:
+        url = f"{base_url}/api/filaments/search?{query_string}"
+        result = try_search(url)
+        if result:
+            break
     
     # If we got results but multiple matches, pick the best one
     if result and result.get('count', 0) > 1:
@@ -270,7 +257,7 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
             # Recently used bonus
             if match.get('lastUsed'):
                 score += 20
-                write_log(f"[postprint] Recently used filament (+20 points)")
+                write_log("[postprint] Recently used filament (+20 points)")
             
             # Remaining weight bonus (prefer filaments with more material)
             remaining = match.get('remainingWeight', 0)
@@ -303,7 +290,7 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
         if color:
             fuzzy_params['color'] = color
         
-        query_string = '&'.join([f"{k}={v}" for k, v in fuzzy_params.items()])
+        query_string = urlencode(fuzzy_params)
         
         for base_url in [host_lan, host_local]:
             url = f"{base_url}/api/filaments/search?{query_string}"
@@ -327,7 +314,7 @@ def find_filament(material: Optional[str], color: Optional[str], brand: Optional
                 alt_params['material'] = material
             alt_params['color'] = 'Translucent'
             
-            query_string = '&'.join([f"{k}={v}" for k, v in alt_params.items()])
+            query_string = urlencode(alt_params)
             
             for base_url in [host_lan, host_local]:
                 url = f"{base_url}/api/filaments/search?{query_string}"
@@ -374,7 +361,7 @@ def use_filament(filament_id: str, grams: float, job_name: str) -> Optional[Dict
     for base_url in [host_lan, host_local]:
         try:
             url = f"{base_url}/api/filaments/{filament_id}/use"
-            response = requests.post(url, json=payload, timeout=5)
+            response = requests.post(url, json=payload, timeout=5, headers=get_auth_headers())
             response.raise_for_status()
             return response.json()
         except Exception:
@@ -434,14 +421,14 @@ def parse_gcode(gcode_path: Path) -> Dict[str, Any]:
         actual_footer_lines = footer_lines[-1000:] if len(footer_lines) > 1000 else footer_lines
         
         for line in reversed(actual_footer_lines):  # Start from end (most recent data)
-            # Filament used in grams (ACTUAL from footer)
+            # Anycubic Slicer: ; filament used [g] = 123.45
             if not info['used_g'] and re.match(r'^\s*;\s*filament used \[g\]\s*=', line, re.IGNORECASE):
                 numbers = re.findall(r'(\d+(?:\.\d+)?)', line)
                 if numbers:
                     info['used_g'] = sum(float(n) for n in numbers)
                     write_log(f"[postprint] Found ACTUAL usage in footer: {info['used_g']}g")
             
-            # Filament used in cm3 (ACTUAL from footer)
+            # Anycubic Slicer: ; filament used [cm3] = 12.34
             if not info['used_mm3'] and not info['used_g'] and re.match(r'^\s*;\s*filament used \[cm3\]\s*=', line, re.IGNORECASE):
                 numbers = re.findall(r'(\d+(?:\.\d+)?)', line)
                 if numbers:
@@ -453,7 +440,7 @@ def parse_gcode(gcode_path: Path) -> Dict[str, Any]:
         if not info['used_g'] and not info['used_mm3']:
             write_log("[postprint] No actual usage in footer, checking header for estimates...")
             for line in header_lines:
-                # Filament used in grams (ESTIMATED from header)
+                # Anycubic Slicer: ; filament used [g] = 123.45
                 if not info['used_g'] and re.match(r'^\s*;\s*filament used \[g\]\s*=', line, re.IGNORECASE):
                     numbers = re.findall(r'(\d+(?:\.\d+)?)', line)
                     if numbers:
@@ -461,7 +448,15 @@ def parse_gcode(gcode_path: Path) -> Dict[str, Any]:
                         write_log(f"[postprint] WARNING: Using ESTIMATED usage from header: {info['used_g']}g")
                         write_log("[postprint] This assumes the print completed successfully!")
                 
-                # Filament used in cm3 (ESTIMATED from header)
+                # Bambu Studio: ; total filament weight [g] : 923.38
+                if not info['used_g'] and re.match(r'^\s*;\s*total filament weight \[g\]\s*:', line, re.IGNORECASE):
+                    match = re.search(r':\s*(\d+(?:\.\d+)?)', line)
+                    if match:
+                        info['used_g'] = float(match.group(1))
+                        write_log(f"[postprint] Found Bambu Studio total weight: {info['used_g']}g")
+                        write_log("[postprint] This assumes the print completed successfully!")
+                
+                # Anycubic Slicer: ; filament used [cm3] = 12.34
                 if not info['used_mm3'] and not info['used_g'] and re.match(r'^\s*;\s*filament used \[cm3\]\s*=', line, re.IGNORECASE):
                     numbers = re.findall(r'(\d+(?:\.\d+)?)', line)
                     if numbers:
@@ -598,7 +593,7 @@ def find_actual_gcode(metadata_path: Path) -> Optional[Path]:
             write_log(f"[postprint] Found G-code in grandparent dir: {gcode}")
             return gcode
     
-    write_log(f"[postprint] Could not find actual G-code file")
+    write_log("[postprint] Could not find actual G-code file")
     return None
 
 
@@ -678,15 +673,15 @@ def main():
             if actual_gcode:
                 gcode_path = actual_gcode
             else:
-                write_log(f"[postprint] WARNING: Could not find actual G-code file")
+                write_log("[postprint] WARNING: Could not find actual G-code file")
                 gcode_path = None
     else:
         # No G-code provided, try to find recent one
-        write_log(f"[postprint] No G-code file provided, searching for recent files...")
+        write_log("[postprint] No G-code file provided, searching for recent files...")
         gcode_path = find_recent_gcode()
         if not gcode_path:
-            write_log(f"[postprint] ERROR: No G-code file found")
-            write_log(f"[postprint] Either provide a G-code file path or use command-line arguments")
+            write_log("[postprint] ERROR: No G-code file found")
+            write_log("[postprint] Either provide a G-code file path or use command-line arguments")
             sys.exit(1)
     
     if gcode_path and gcode_path.exists():

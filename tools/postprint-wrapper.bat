@@ -3,7 +3,7 @@ REM Wrapper script for Anycubic Slicer post-processing
 REM This helps diagnose issues with auto-deduction
 REM
 REM Usage: Add this to your slicer's post-processing command:
-REM   "D:\VSCode\Filament in python\3d-filament-inventory-management-home\tools\postprint-wrapper.bat"
+REM   "path\to\tools\postprint-wrapper.bat"
 REM
 REM The slicer will automatically pass the G-code file path as the first argument
 

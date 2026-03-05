@@ -5,9 +5,10 @@ Tests both successful prints (footer data) and failed prints (header-only data)
 """
 
 import os
+import subprocess
 import sys
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 print("=" * 70)
 print("Testing Auto-Deduct Script - Complete Print vs Failed Print")
@@ -53,7 +54,6 @@ print(f"Created test G-code: {gcode_complete_path}")
 print()
 
 # Run test for complete print
-import subprocess
 os.environ['FILAMENT_POSTPRINT_LOG'] = '1'
 
 script_dir = Path(__file__).parent
@@ -73,7 +73,7 @@ if result1.stderr:
 # Clean up
 try:
     os.unlink(gcode_complete_path)
-except:
+except OSError:
     pass
 
 if "24.80" in result1.stdout or "24.8" in result1.stdout:
@@ -132,7 +132,7 @@ if result2.stderr:
 # Clean up
 try:
     os.unlink(gcode_failed_path)
-except:
+except OSError:
     pass
 
 if "WARNING" in result2.stdout and ("25.50" in result2.stdout or "25.5" in result2.stdout):

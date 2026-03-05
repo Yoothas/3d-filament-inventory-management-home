@@ -1,11 +1,10 @@
-import streamlit as st
-import json
+import os
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from pathlib import Path
-from datetime import datetime
-from typing import Any, Dict, List
 import plotly.express as px
-import plotly.graph_objects as go
+import requests
+import streamlit as st
 
 # Page configuration
 st.set_page_config(
@@ -24,33 +23,52 @@ st.markdown("""
         border-radius: 5px;
         border-left: 4px solid #f44336;
     }
-    .metric-card {
-        background-color: #f5f5f5;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Data file path
-DATA_FILE = Path(__file__).parent / 'data' / 'filaments.json'
+# API configuration
+API_BASE = os.environ.get('FILAMENT_API_URL', 'http://localhost:5000')
 
-@st.cache_data(show_spinner=False)
+
+def _api_headers() -> Dict[str, str]:
+    """Build request headers including API key if set."""
+    headers: Dict[str, str] = {}
+    api_key = os.environ.get('FILAMENT_API_KEY', '')
+    if api_key:
+        headers['X-API-Key'] = api_key
+    return headers
+
+
+def _api_call(
+    method: str, path: str, **kwargs: Any
+) -> Optional[Dict[str, Any]]:
+    """Make an API call. Returns parsed JSON or None on failure."""
+    try:
+        resp = requests.request(
+            method, f"{API_BASE}{path}",
+            headers=_api_headers(), timeout=5, **kwargs
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=2, show_spinner=False)
 def load_filaments() -> List[Dict[str, Any]]:
-    """Load filaments from JSON file"""
-    if DATA_FILE.exists():
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else data.get('filaments', [])
-    return []
-
-def save_filaments(filaments: List[Dict[str, Any]]) -> None:
-    """Save filaments to JSON file"""
-    DATA_FILE.parent.mkdir(exist_ok=True)
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(filaments, f, indent=2)
-    load_filaments.clear()
+    """Load filaments from Flask API"""
+    try:
+        resp = requests.get(
+            f"{API_BASE}/api/filaments",
+            params={'include_archived': 'true'},
+            headers=_api_headers(),
+            timeout=5
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
 
 def calculate_stats(filaments: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Calculate inventory statistics"""
@@ -83,32 +101,6 @@ def calculate_stats(filaments: List[Dict[str, Any]]) -> Dict[str, Any]:
         'total_value': total_value,
         'low_stock_count': low_stock
     }
-
-def format_filament_card(filament: Dict[str, Any]) -> str:
-    """Create a formatted card for a filament"""
-    total_weight = filament.get('weight') or 0
-    remaining_weight = filament.get('remainingWeight') or 0
-
-    if total_weight > 0:
-        remaining_pct = max(min((remaining_weight / total_weight) * 100, 100), 0)
-    else:
-        remaining_pct = 0
-
-    is_low_stock = total_weight > 0 and remaining_pct < 20
-    
-    card_class = 'low-stock' if is_low_stock else ''
-    
-    return f"""
-    <div class="{card_class}" style="margin-bottom: 10px;">
-        <h4>🎨 {filament['color']} - {filament['material']}</h4>
-        <p><strong>Brand:</strong> {filament['brand']}</p>
-        <p><strong>Remaining:</strong> {filament['remainingWeight']}g / {filament['weight']}g ({remaining_pct:.1f}%)</p>
-        <p><strong>Diameter:</strong> {filament['diameter']}mm</p>
-        <p><strong>Cost:</strong> ${filament.get('cost', 0):.2f}</p>
-        {f"<p><strong>Purchase Date:</strong> {filament.get('purchaseDate', 'N/A')}</p>" if filament.get('purchaseDate') else ''}
-    </div>
-    """
-
 
 def remaining_ratio(filament: Dict[str, Any]) -> float:
     """Return remaining weight ratio between 0 and 1."""
@@ -217,9 +209,16 @@ def sort_filaments(filaments: List[Dict[str, Any]], sort_key: str) -> List[Dict[
 def main():
     st.title("🎯 3D Filament Inventory Dashboard")
     
-    # Load data
+    # Load data from Flask API
     all_filaments = load_filaments()
-    
+
+    # Check API connectivity
+    if not all_filaments:
+        try:
+            requests.get(f"{API_BASE}/", timeout=2)
+        except requests.ConnectionError:
+            st.warning(f"⚠️ Cannot connect to Flask API at {API_BASE}. Start it with: `python app.py`")
+
     # Sidebar filters
     st.sidebar.header("🔍 Filters & Sorting")
     
@@ -270,22 +269,15 @@ def main():
     # Auto-Archive button
     st.sidebar.divider()
     if st.sidebar.button("🗄️ Auto-Archive Empty Spools"):
-        archived_count = 0
-        archived_names = []
-        for filament in all_filaments:
-            if filament['remainingWeight'] <= 0 and not filament.get('archived', False):
-                filament['archived'] = True
-                filament['archivedAt'] = datetime.now().isoformat()
-                filament['updatedAt'] = datetime.now().isoformat()
-                archived_count += 1
-                archived_names.append(f"{filament['brand']} {filament['color']}")
-        
-        if archived_count > 0:
-            save_filaments(all_filaments)
-            st.sidebar.success(f"Archived {archived_count} spool(s)!")
+        result = _api_call('POST', '/api/filaments/auto-archive')
+        if result and result.get('archived_count', 0) > 0:
+            load_filaments.clear()
+            st.sidebar.success(f"Archived {result['archived_count']} spool(s)!")
             st.rerun()
-        else:
+        elif result:
             st.sidebar.info("No empty spools to archive")
+        else:
+            st.sidebar.error("API error — is Flask running?")
     
     # Statistics cards
     st.header("📊 Inventory Overview")
@@ -363,7 +355,7 @@ def main():
                 
                 with st.container():
                     if is_low_stock:
-                        st.error(f"⚠️ Low Stock!")
+                        st.error("⚠️ Low Stock!")
                     
                     st.subheader(f"🎨 {filament['color']}")
                     st.write(f"**Material:** {filament['material']}")
@@ -412,21 +404,24 @@ def main():
                                 cancel_clicked = st.form_submit_button("❌ Cancel")
                             
                             if save_clicked:
-                                # Update filament
-                                filament['brand'] = edit_brand
-                                filament['color'] = edit_color
-                                filament['material'] = edit_material
-                                filament['weight'] = edit_weight
-                                filament['remainingWeight'] = edit_remaining
-                                filament['diameter'] = edit_diameter
-                                filament['cost'] = edit_cost
-                                filament['notes'] = edit_notes
-                                filament['updatedAt'] = datetime.now().isoformat()
-                                
-                                save_filaments(all_filaments)
-                                st.session_state[editing_key] = False
-                                st.success("✅ Updated successfully!")
-                                st.rerun()
+                                payload = {
+                                    'brand': edit_brand,
+                                    'color': edit_color,
+                                    'material': edit_material,
+                                    'weight': edit_weight,
+                                    'remainingWeight': edit_remaining,
+                                    'diameter': edit_diameter,
+                                    'cost': edit_cost,
+                                    'notes': edit_notes,
+                                }
+                                result = _api_call('PUT', f"/api/filaments/{filament['id']}", json=payload)
+                                if result:
+                                    load_filaments.clear()
+                                    st.session_state[editing_key] = False
+                                    st.success("✅ Updated successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to update — is Flask running?")
                             
                             if cancel_clicked:
                                 st.session_state[editing_key] = False
@@ -443,29 +438,33 @@ def main():
                         with button_col2:
                             if is_archived:
                                 if st.button("↻ Restore", key=f"unarchive_{filament['id']}"):
-                                    filament['archived'] = False
-                                    if 'archivedAt' in filament:
-                                        del filament['archivedAt']
-                                    filament['updatedAt'] = datetime.now().isoformat()
-                                    save_filaments(all_filaments)
-                                    st.success(f"Restored {filament['brand']} {filament['color']}")
-                                    st.rerun()
+                                    result = _api_call('POST', f"/api/filaments/{filament['id']}/unarchive")
+                                    if result:
+                                        load_filaments.clear()
+                                        st.success(f"Restored {filament['brand']} {filament['color']}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to restore — is Flask running?")
                             else:
                                 if filament['remainingWeight'] <= 0:
                                     if st.button("📦 Archive", key=f"archive_{filament['id']}"):
-                                        filament['archived'] = True
-                                        filament['archivedAt'] = datetime.now().isoformat()
-                                        filament['updatedAt'] = datetime.now().isoformat()
-                                        save_filaments(all_filaments)
-                                        st.success(f"Archived {filament['brand']} {filament['color']}")
-                                        st.rerun()
+                                        result = _api_call('POST', f"/api/filaments/{filament['id']}/archive")
+                                        if result:
+                                            load_filaments.clear()
+                                            st.success(f"Archived {filament['brand']} {filament['color']}")
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to archive — is Flask running?")
                         
                         with button_col3:
                             if st.button("🗑️ Delete", key=f"delete_{filament['id']}"):
-                                all_filaments.remove(filament)
-                                save_filaments(all_filaments)
-                                st.success("Deleted successfully!")
-                                st.rerun()
+                                result = _api_call('DELETE', f"/api/filaments/{filament['id']}")
+                                if result:
+                                    load_filaments.clear()
+                                    st.success("Deleted successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete — is Flask running?")
                         
                         # Show archived badge
                         if is_archived:
@@ -498,8 +497,7 @@ def main():
         
         if submitted:
             if new_brand and new_material and new_color:
-                new_filament = {
-                    'id': str(int(datetime.now().timestamp() * 1000)),
+                payload = {
                     'brand': new_brand,
                     'material': new_material,
                     'color': new_color,
@@ -509,13 +507,14 @@ def main():
                     'cost': new_cost,
                     'purchaseDate': str(new_purchase_date),
                     'notes': new_notes,
-                    'createdAt': datetime.now().isoformat()
                 }
-                
-                all_filaments.append(new_filament)
-                save_filaments(all_filaments)
-                st.success("✅ Filament added successfully!")
-                st.rerun()
+                result = _api_call('POST', '/api/filaments', json=payload)
+                if result:
+                    load_filaments.clear()
+                    st.success("✅ Filament added successfully!")
+                    st.rerun()
+                else:
+                    st.error("Failed to add filament — is Flask running?")
             else:
                 st.error("❌ Please fill in all required fields (marked with *)")
 

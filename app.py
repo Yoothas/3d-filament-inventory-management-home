@@ -1,13 +1,19 @@
-from flask import Flask, request, jsonify
+import hmac
 import json
 import os
+import tempfile
+import uuid
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
+
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
 # Configuration
 PORT = int(os.environ.get('PORT', 5000))  # Default to 5000 (3000 may be restricted on Windows)
+API_KEY = os.environ.get('FILAMENT_API_KEY', '')  # Optional API key for mutation endpoints
 DATA_DIR = Path(__file__).parent / 'data'
 DATA_FILE = DATA_DIR / 'filaments.json'
 
@@ -21,6 +27,26 @@ if not DATA_FILE.exists():
 
 
 # Helper functions
+def require_api_key(f):
+    """Decorator that checks X-API-Key header when FILAMENT_API_KEY is set."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if API_KEY:
+            provided = request.headers.get('X-API-Key', '')
+            if not hmac.compare_digest(provided, API_KEY):
+                return jsonify({'error': 'Unauthorized – invalid or missing API key'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+def safe_float(value, default=0.0):
+    """Safely convert a value to float, returning default on failure."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def read_filaments():
     """Read filaments from JSON file"""
     try:
@@ -32,10 +58,16 @@ def read_filaments():
 
 
 def write_filaments(filaments):
-    """Write filaments to JSON file"""
+    """Write filaments to JSON file atomically (temp file + rename)."""
     try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(filaments, f, indent=2)
+        fd, tmp = tempfile.mkstemp(dir=str(DATA_DIR), suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(filaments, f, indent=2)
+            os.replace(tmp, str(DATA_FILE))
+        except BaseException:
+            os.unlink(tmp)
+            raise
         return True
     except Exception as e:
         print(f'Error writing filaments: {e}')
@@ -72,21 +104,24 @@ def get_filaments():
 
 
 @app.route('/api/filaments', methods=['POST'])
+@require_api_key
 def add_filament():
     """Add a new filament"""
     data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     filaments = read_filaments()
     
     new_filament = {
-        'id': str(int(datetime.now().timestamp() * 1000)),
+        'id': uuid.uuid4().hex,
         'brand': data.get('brand'),
         'material': data.get('material'),
         'color': data.get('color'),
-        'weight': float(data.get('weight', 0)),
-        'remainingWeight': float(data.get('remainingWeight', data.get('weight', 0))),
-        'diameter': float(data.get('diameter', 1.75)),
+        'weight': safe_float(data.get('weight', 0)),
+        'remainingWeight': safe_float(data.get('remainingWeight', data.get('weight', 0))),
+        'diameter': safe_float(data.get('diameter', 1.75), 1.75),
         'purchaseDate': data.get('purchaseDate', ''),
-        'cost': float(data.get('cost', 0)),
+        'cost': safe_float(data.get('cost', 0)),
         'notes': data.get('notes', ''),
         'createdAt': datetime.now().isoformat()
     }
@@ -100,9 +135,12 @@ def add_filament():
 
 
 @app.route('/api/filaments/<filament_id>', methods=['PUT'])
+@require_api_key
 def update_filament(filament_id):
     """Update an existing filament"""
     data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     filaments = read_filaments()
     
     filament_index = next((i for i, f in enumerate(filaments) if f['id'] == filament_id), None)
@@ -110,19 +148,29 @@ def update_filament(filament_id):
     if filament_index is None:
         return jsonify({'error': 'Filament not found'}), 404
     
-    updated_filament = {
-        **filaments[filament_index],
-        'brand': data.get('brand'),
-        'material': data.get('material'),
-        'color': data.get('color'),
-        'weight': float(data.get('weight', 0)),
-        'remainingWeight': float(data.get('remainingWeight', 0)),
-        'diameter': float(data.get('diameter', 1.75)),
-        'purchaseDate': data.get('purchaseDate', ''),
-        'cost': float(data.get('cost', 0)),
-        'notes': data.get('notes', ''),
-        'updatedAt': datetime.now().isoformat()
-    }
+    existing = filaments[filament_index]
+    updated_filament = {**existing}
+    
+    # Only update fields that are present in the request body
+    if 'brand' in data:
+        updated_filament['brand'] = data['brand']
+    if 'material' in data:
+        updated_filament['material'] = data['material']
+    if 'color' in data:
+        updated_filament['color'] = data['color']
+    if 'weight' in data:
+        updated_filament['weight'] = safe_float(data['weight'])
+    if 'remainingWeight' in data:
+        updated_filament['remainingWeight'] = safe_float(data['remainingWeight'])
+    if 'diameter' in data:
+        updated_filament['diameter'] = safe_float(data['diameter'], 1.75)
+    if 'purchaseDate' in data:
+        updated_filament['purchaseDate'] = data['purchaseDate']
+    if 'cost' in data:
+        updated_filament['cost'] = safe_float(data['cost'])
+    if 'notes' in data:
+        updated_filament['notes'] = data['notes']
+    updated_filament['updatedAt'] = datetime.now().isoformat()
     
     filaments[filament_index] = updated_filament
     
@@ -133,6 +181,7 @@ def update_filament(filament_id):
 
 
 @app.route('/api/filaments/<filament_id>', methods=['DELETE'])
+@require_api_key
 def delete_filament(filament_id):
     """Delete a filament"""
     filaments = read_filaments()
@@ -153,9 +202,12 @@ def delete_filament(filament_id):
 # AMS Integration API Endpoints
 
 @app.route('/api/filaments/<filament_id>/use', methods=['POST'])
+@require_api_key
 def use_filament(filament_id):
     """Reduce filament usage after print completion"""
     data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     filaments = read_filaments()
     
     filament_index = next((i for i, f in enumerate(filaments) if f['id'] == filament_id), None)
@@ -163,9 +215,9 @@ def use_filament(filament_id):
     if filament_index is None:
         return jsonify({'error': 'Filament not found'}), 404
     
-    used_weight = float(data.get('usedWeight', 0))
+    used_weight = safe_float(data.get('usedWeight', 0))
     print_job = data.get('printJob', 'Unknown')
-    print_time = data.get('printTime', 0)
+    print_time = safe_float(data.get('printTime', 0))
     
     if used_weight <= 0:
         return jsonify({'error': 'Invalid used weight'}), 400
@@ -230,19 +282,19 @@ def search_filaments():
     ams_slot = request.args.get('ams_slot', '')
     
     # Only available spools (active and with remaining weight)
-    filtered = [f for f in filaments if f['remainingWeight'] > 0 and not f.get('archived', False)]
+    filtered = [f for f in filaments if f.get('remainingWeight', 0) > 0 and not f.get('archived', False)]
     
     if material:
-        filtered = [f for f in filtered if material in f['material'].lower()]
+        filtered = [f for f in filtered if material in (f.get('material') or '').lower()]
     
     if color:
-        filtered = [f for f in filtered if color in f['color'].lower()]
+        filtered = [f for f in filtered if color in (f.get('color') or '').lower()]
     
     if brand:
-        filtered = [f for f in filtered if brand in f['brand'].lower()]
+        filtered = [f for f in filtered if brand in (f.get('brand') or '').lower()]
     
     # Sort by remaining weight (most full first)
-    filtered.sort(key=lambda x: x['remainingWeight'], reverse=True)
+    filtered.sort(key=lambda x: x.get('remainingWeight', 0), reverse=True)
     
     return jsonify({
         'matches': filtered,
@@ -257,9 +309,12 @@ def search_filaments():
 
 
 @app.route('/api/filaments/bulk-use', methods=['POST'])
+@require_api_key
 def bulk_use_filaments():
     """Bulk usage for multi-material prints"""
     usage_data = request.get_json()
+    if usage_data is None:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     filaments = read_filaments()
     results = []
     
@@ -267,6 +322,9 @@ def bulk_use_filaments():
         return jsonify({'error': 'Expected array of usage data'}), 400
     
     for usage in usage_data:
+        if not isinstance(usage, dict):
+            results.append({'error': 'Invalid usage entry'})
+            continue
         filament_id = usage.get('id')
         filament_index = next((i for i, f in enumerate(filaments) if f['id'] == filament_id), None)
         
@@ -274,7 +332,7 @@ def bulk_use_filaments():
             results.append({'id': filament_id, 'error': 'Filament not found'})
             continue
         
-        used_weight = float(usage.get('usedWeight', 0))
+        used_weight = safe_float(usage.get('usedWeight', 0))
         if used_weight <= 0:
             results.append({'id': filament_id, 'error': 'Invalid used weight'})
             continue
@@ -297,18 +355,27 @@ def bulk_use_filaments():
         # Keep last 10 print jobs
         print_history = print_history[-10:]
         
-        filaments[filament_index] = {
+        updated = {
             **filament,
             'remainingWeight': new_remaining_weight,
             'lastUsed': datetime.now().isoformat(),
-            'printHistory': print_history
+            'printHistory': print_history,
+            'updatedAt': datetime.now().isoformat()
         }
+        
+        # Auto-archive if empty
+        if new_remaining_weight <= 0:
+            updated['archived'] = True
+            updated['archivedAt'] = datetime.now().isoformat()
+        
+        filaments[filament_index] = updated
         
         results.append({
             'id': filament_id,
             'success': True,
             'usedWeight': used_weight,
             'remainingWeight': new_remaining_weight,
+            'auto_archived': new_remaining_weight <= 0,
             'filament': f"{filament['brand']} {filament['color']}"
         })
     
@@ -321,25 +388,10 @@ def bulk_use_filaments():
         return jsonify({'error': 'Failed to save filament updates'}), 500
 
 
-@app.route('/api/ams/status', methods=['GET'])
-def ams_status():
-    """AMS status endpoint for mapping physical slots to inventory"""
-    ams_slots = {
-        'slot_1': {'filament_id': None, 'material': None, 'color': None},
-        'slot_2': {'filament_id': None, 'material': None, 'color': None},
-        'slot_3': {'filament_id': None, 'material': None, 'color': None},
-        'slot_4': {'filament_id': None, 'material': None, 'color': None}
-    }
-    
-    return jsonify({
-        'ams_slots': ams_slots,
-        'message': 'AMS integration ready - map filaments to slots in your slicer'
-    })
-
-
 # Archive/History Endpoints
 
 @app.route('/api/filaments/<filament_id>/archive', methods=['POST'])
+@require_api_key
 def archive_filament(filament_id):
     """Archive a filament spool (marks as used up, keeps history)"""
     filaments = read_filaments()
@@ -372,6 +424,7 @@ def archive_filament(filament_id):
 
 
 @app.route('/api/filaments/<filament_id>/unarchive', methods=['POST'])
+@require_api_key
 def unarchive_filament(filament_id):
     """Restore an archived filament"""
     filaments = read_filaments()
@@ -406,31 +459,8 @@ def unarchive_filament(filament_id):
         return jsonify({'error': 'Failed to unarchive filament'}), 500
 
 
-@app.route('/api/filaments/archived', methods=['GET'])
-def get_archived_filaments():
-    """Get all archived filaments"""
-    filaments = read_filaments()
-    archived = [f for f in filaments if f.get('archived', False)]
-    
-    return jsonify({
-        'filaments': archived,
-        'count': len(archived)
-    })
-
-
-@app.route('/api/filaments/active', methods=['GET'])
-def get_active_filaments():
-    """Get all active (non-archived) filaments"""
-    filaments = read_filaments()
-    active = [f for f in filaments if not f.get('archived', False)]
-    
-    return jsonify({
-        'filaments': active,
-        'count': len(active)
-    })
-
-
 @app.route('/api/filaments/auto-archive', methods=['POST'])
+@require_api_key
 def auto_archive_empty():
     """Automatically archive all empty spools (0g remaining)"""
     filaments = read_filaments()
@@ -478,10 +508,12 @@ def internal_error(error):
 
 
 if __name__ == '__main__':
+    debug_mode = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true')
+    host = os.environ.get('FLASK_HOST', '127.0.0.1')
     print(f'3D Filament Inventory Server running on port {PORT}')
-    print(f'Access the application at:')
+    print('Access the application at:')
     print(f'  Local: http://localhost:{PORT}')
-    print(f'  Network: http://YOUR_IP_ADDRESS:{PORT}')
-    print(f'\nShare the Network URL to access from any browser!')
-    
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+    if host == '0.0.0.0':
+        print(f'  Network: http://YOUR_IP_ADDRESS:{PORT}')
+    print('\nSet FLASK_HOST=0.0.0.0 to allow network access.')
+    app.run(host=host, port=PORT, debug=debug_mode)
